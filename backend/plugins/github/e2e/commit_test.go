@@ -30,3 +30,6 @@ func TestCommitDataFlow(t *testing.T) {
 	assert.False(t, tasks.ExtractApiCommitStatsMeta.EnabledByDefault)
 	assert.False(t, tasks.ConvertCommitsMeta.EnabledByDefault)
 }
+
+
+
