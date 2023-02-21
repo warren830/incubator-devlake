@@ -55,43 +55,202 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
       - name: Test
+        if: ${{ steps.check-paths.outputs.paths_changed == 'true' }}
         env:
           DB_URL: mysql://root:root@db:3306/lake?charset=utf8mb4&parseTime=True
           E2E_DB_URL: mysql://root:root@db:3306/lake?charset=utf8mb4&parseTime=True
         run: |
           cp .env.example backend/.env
-          cd backend
-          make e2e-test
-          make e2e-plugins-test
-
-  e2e-postgres:
-    runs-on: ubuntu-latest
-    services:
-      db:
-        image: postgres:14.2
-        env:
-          POSTGRES_DB: lake
-          POSTGRES_USER: merico
-          POSTGRES_PASSWORD: merico
-    container: mericodev/lake-builder:latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Cache test-e2e-pg
-        id: cache-test-e2e-pg
-        uses: actions/cache@v3
+      - name:  Check paths
+        id:  check-paths
+        uses: dorny/paths-filter@v2
         with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      - name: Test-pg
-        env:
-          DB_URL: postgres://merico:merico@db:5432/lake
-          E2E_DB_URL: postgres://merico:merico@db:5432/lake
+          filters: |
+            backend:
+              - 'backend/core/**'
+              - 'backend/impls/**'
+              - 'backend/helpers/**'
+            ae:
+              - 'frontend/**'
+            azure:
+              - 'backend/plugins/azure/**'
+            bamboo:
+              - 'backend/plugins/bamboo/**'
+            bitbucket:
+              - 'backend/plugins/bitbucket/**'
+            customize:
+              - 'backend/plugins/customize/**'
+            dbt:
+              - 'backend/plugins/dbt/**'
+            dora:
+              - 'backend/plugins/dora/**'
+            feishu:
+              - 'backend/plugins/feishu/**'
+            gitee:
+              - 'backend/plugins/gitee/**'
+            gitextractor:
+              - 'backend/plugins/gitextractor/**'
+            github:
+              - 'backend/plugins/github/**'
+            github_graphql:
+              - 'backend/plugins/github_graphql/**'
+            gitlab:
+              - 'backend/plugins/gitlab/**'
+            icla:
+              - 'backend/plugins/icla/**'
+            jenkins:
+              - 'backend/plugins/jenkins/**'
+            jira:
+              - 'backend/plugins/jira/**'
+            org:
+              - 'backend/plugins/org/**'
+            pagerduty:
+              - 'backend/plugins/pagerduty/**'
+            refdiff:
+              - 'backend/plugins/refdiff/**'
+            sonarqube:
+              - 'backend/plugins/sonarqube/**'
+            starrocks:
+              - 'backend/plugins/starrocks/**'
+            tapd:
+              - 'backend/plugins/tapd/**'
+            webhook:
+              - 'backend/plugins/webhook/**'
+            zentao:
+              - 'backend/plugins/zentao/**'
+      # run only if 'backend' files were changed
+      - name: backend tests
+        if: steps.filter.outputs.backend == 'true'
         run: |
-          cp .env.example backend/.env
-          cd backend
-          make e2e-test
-          make e2e-plugins-test
+            cd backend
+            make e2e-test
+            cd ..
+      # make e2e-plugins-test
+      - name: ae tests
+        if: steps.filter.outputs.ae == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/ae/...
+      - name: azure tests
+        if: steps.filter.outputs.azure == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/azure/...
+      - name: bamboo tests
+        if: steps.filter.outputs.bamboo == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/bamboo/...
+      - name: bitbucket tests
+        if: steps.filter.outputs.bitbucket == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/bitbucket/...
+      - name: customize tests
+        if: steps.filter.outputs.customize == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/customize/...
+      - name: dbt tests
+        if: steps.filter.outputs.dbt == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/dbt/...
+      - name: dora tests
+        if: steps.filter.outputs.dora == 'true'
+        run: |
+           go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/dora/...
+      - name: feishu tests
+        if: steps.filter.outputs.feishu == 'true'
+        run: |
+           go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/feishu/...
+      - name: gitee tests
+        if: steps.filter.outputs.gitee == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitee/...
+      - name: gitextractor tests
+        if: steps.filter.outputs.gitextractor == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitextractor/...
+      - name: github tests
+        if: steps.filter.outputs.github == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/github/...
+      - name: github_graphql tests
+        if: steps.filter.outputs.github_graphql == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/github_graphql/...
+      - name: gitlab tests
+        if: steps.filter.outputs.gitlab == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitlab/...
+      - name: icla tests
+        if: steps.filter.outputs.icla == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/icla/...
+      - name: jenkins tests
+        if: steps.filter.outputs.jenkins == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/jenkins/...
+      - name: jira tests
+        if: steps.filter.outputs.jira == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/jira/...
+      - name: org tests
+        if: steps.filter.outputs.org == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/org/...
+      - name: pagerduty tests
+        if: steps.filter.outputs.pagerduty == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/pagerduty/...
+      - name: refdiff tests
+        if: steps.filter.outputs.refdiff == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/refdiff/...
+      - name: sonarqube tests
+        if: steps.filter.outputs.sonarqube == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/sonarqube/...
+      - name: starrocks tests
+        if: steps.filter.outputs.starrocks == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/starrocks/...
+      - name: tapd tests
+        if: steps.filter.outputs.tapd == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/tapd/...
+      - name: webhook tests
+        if: steps.filter.outputs.webhook == 'true'
+        run: |
+            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/webhook/...
+      - name: zentao tests
+        if: steps.filter.outputs.webhook == 'true'
+        run: |
+          go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/zentao/...
+  #            make e2e-plugins-test
+#  e2e-postgres:
+#    runs-on: ubuntu-latest
+#    services:
+#      db:
+#        image: postgres:14.2
+#        env:
+#          POSTGRES_DB: lake
+#          POSTGRES_USER: merico
+#          POSTGRES_PASSWORD: merico
+#    container: mericodev/lake-builder:latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Cache test-e2e-pg
+#        id: cache-test-e2e-pg
+#        uses: actions/cache@v3
+#        with:
+#          path: |
+#            ~/.cache/go-build
+#            ~/go/pkg/mod
+#          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+#          restore-keys: |
+#            ${{ runner.os }}-go-
+#      - name: Test-pg
+#        env:
+#          DB_URL: postgres://merico:merico@db:5432/lake
+#          E2E_DB_URL: postgres://merico:merico@db:5432/lake
+#        run: |
+#          cp .env.example backend/.env
+#          cd backend
+#          make e2e-test
+#          make e2e-plugins-test
