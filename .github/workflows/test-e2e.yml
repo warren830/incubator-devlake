@@ -61,6 +61,7 @@ jobs:
           E2E_DB_URL: mysql://root:root@db:3306/lake?charset=utf8mb4&parseTime=True
         run: |
           cp .env.example backend/.env
+          cd backend
       - name:  Check paths
         id:  filter
         uses: dorny/paths-filter@v2
@@ -122,106 +123,105 @@ jobs:
       - name: backend tests
         if: steps.filter.outputs.backend == 'true'
         run: |
-            cd backend
             make e2e-test
             cd ..
       # make e2e-plugins-test
       - name: ae tests
         if: steps.filter.outputs.ae == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/ae/...
+            for m in $$(go list ./plugins/ae/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: azure tests
         if: steps.filter.outputs.azure == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/azure/...
+            for m in $$(go list ./plugins/azure/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: bamboo tests
         if: steps.filter.outputs.bamboo == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/bamboo/...
+            for m in $$(go list ./plugins/bamboo/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: bitbucket tests
         if: steps.filter.outputs.bitbucket == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/bitbucket/...
+            for m in $$(go list ./plugins/bitbucket/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: customize tests
         if: steps.filter.outputs.customize == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/customize/...
+            for m in $$(go list ./plugins/customize/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: dbt tests
         if: steps.filter.outputs.dbt == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/dbt/...
+            for m in $$(go list ./plugins/dbt/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: dora tests
         if: steps.filter.outputs.dora == 'true'
         run: |
-           go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/dora/...
+            for m in $$(go list ./plugins/dora/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: feishu tests
         if: steps.filter.outputs.feishu == 'true'
         run: |
-           go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/feishu/...
+            for m in $$(go list ./plugins/feishu/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: gitee tests
         if: steps.filter.outputs.gitee == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitee/...
+            for m in $$(go list ./plugins/gitee/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: gitextractor tests
         if: steps.filter.outputs.gitextractor == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitextractor/...
+            for m in $$(go list ./plugins/gitextractor/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: github tests
         if: steps.filter.outputs.github == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/github/...
+            for m in $$(go list ./plugins/github/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: github_graphql tests
         if: steps.filter.outputs.github_graphql == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/github_graphql/...
+            for m in $$(go list ./plugins/github_graphql/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: gitlab tests
         if: steps.filter.outputs.gitlab == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/gitlab/...
+            for m in $$(go list ./plugins/gitlab/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: icla tests
         if: steps.filter.outputs.icla == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/icla/...
+            for m in $$(go list ./plugins/icla/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: jenkins tests
         if: steps.filter.outputs.jenkins == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/jenkins/...
+            for m in $$(go list ./plugins/jenkins/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: jira tests
         if: steps.filter.outputs.jira == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/jira/...
+            for m in $$(go list ./plugins/jira/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: org tests
         if: steps.filter.outputs.org == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/org/...
+            for m in $$(go list ./plugins/org/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: pagerduty tests
         if: steps.filter.outputs.pagerduty == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/pagerduty/...
+            for m in $$(go list ./plugins/pagerduty/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: refdiff tests
         if: steps.filter.outputs.refdiff == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/refdiff/...
+            for m in $$(go list ./plugins/refdiff/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: sonarqube tests
         if: steps.filter.outputs.sonarqube == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/sonarqube/...
+            for m in $$(go list ./plugins/sonarqube/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: starrocks tests
         if: steps.filter.outputs.starrocks == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/starrocks/...
+            for m in $$(go list ./plugins/starrocks/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: tapd tests
         if: steps.filter.outputs.tapd == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/tapd/...
+            for m in $$(go list ./plugins/tapd/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: webhook tests
         if: steps.filter.outputs.webhook == 'true'
         run: |
-            go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/webhook/...
+            for m in $$(go list ./plugins/webhook/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
       - name: zentao tests
         if: steps.filter.outputs.webhook == 'true'
         run: |
-          go test -timeout 300s -gcflags=all=-l -v ./backend/plugins/zentao/...
+            for m in $$(go list ./plugins/zentao/... | egrep 'e2e'); do echo $$m; go test -timeout 300s -gcflags=all=-l -v $$m; done
   #            make e2e-plugins-test
 #  e2e-postgres:
 #    runs-on: ubuntu-latest
