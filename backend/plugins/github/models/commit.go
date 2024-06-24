@@ -42,3 +42,6 @@ type GithubCommit struct {
 func (GithubCommit) TableName() string {
 	return "_tool_github_commits"
 }
+
+
+
