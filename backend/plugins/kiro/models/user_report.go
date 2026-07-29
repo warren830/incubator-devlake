@@ -41,7 +41,7 @@ type KiroUserReport struct {
 	// always carry the prefix and some report files do too, so both paths
 	// normalize - otherwise one person yields two distinct ids and every
 	// per-person aggregate is quietly wrong.
-	UserId string `gorm:"primaryKey;type:varchar(64)"`
+	UserId string    `gorm:"primaryKey;type:varchar(64)"`
 	Date   time.Time `gorm:"primaryKey;type:date"`
 	// ClientType is KIRO_IDE, KIRO_CLI, KIRO_WEB or PLUGIN. KIRO_WEB appears in
 	// real exports but not in the published docs, so this is not validated

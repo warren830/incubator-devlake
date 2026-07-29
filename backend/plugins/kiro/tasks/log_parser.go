@@ -46,11 +46,11 @@ const (
 type chatLogFile struct {
 	Records []struct {
 		Request *struct {
-			Prompt          *string `json:"prompt"`
-			ChatTriggerType *string `json:"chatTriggerType"`
-			UserId          *string `json:"userId"`
-			TimeStamp       *string `json:"timeStamp"`
-			ModelId         *string `json:"modelId"`
+			Prompt           *string `json:"prompt"`
+			ChatTriggerType  *string `json:"chatTriggerType"`
+			UserId           *string `json:"userId"`
+			TimeStamp        *string `json:"timeStamp"`
+			ModelId          *string `json:"modelId"`
 			CustomizationArn *string `json:"customizationArn"`
 		} `json:"generateAssistantResponseEventRequest"`
 		Response *struct {
