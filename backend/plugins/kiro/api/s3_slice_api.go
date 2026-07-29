@@ -94,7 +94,7 @@ func PatchScope(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, erro
 // @Tags plugins/kiro
 // @Param connectionId path int true "connection ID"
 // @Param scopeId path string true "scope ID"
-// @Success 200  {object} srvhelper.ScopeDetail
+// @Success 200  {object} ScopeDetail
 // @Failure 400  {object} shared.ApiBody "Bad Request"
 // @Failure 500  {object} shared.ApiBody "Internal Error"
 // @Router /plugins/kiro/connections/{connectionId}/scopes/{scopeId} [DELETE]
@@ -108,7 +108,7 @@ func DeleteScope(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, err
 // @Tags plugins/kiro
 // @Param connectionId path int true "connection ID"
 // @Param scopeId path string true "scope ID"
-// @Success 200  {object} []srvhelper.ScopeSyncState
+// @Success 200  {object} []models.LatestSyncState
 // @Failure 400  {object} shared.ApiBody "Bad Request"
 // @Failure 500  {object} shared.ApiBody "Internal Error"
 // @Router /plugins/kiro/connections/{connectionId}/scopes/{scopeId}/latest-sync-state [GET]
