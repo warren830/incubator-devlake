@@ -30,12 +30,6 @@ import (
 	"github.com/apache/incubator-devlake/plugins/kiro/tasks"
 )
 
-// KiroRemotePagination is unused: S3 prefix listings are small enough to return
-// whole, and the helper requires a pagination type.
-type KiroRemotePagination struct {
-	Page int `json:"page"`
-}
-
 // listKiroRemoteScopes browses the export layout as a tree.
 //
 // Three levels, mirroring Kiro's own S3 partitioning:
@@ -47,31 +41,22 @@ type KiroRemotePagination struct {
 // Everything comes from S3 rather than user input. That is the point: a
 // hand-typed prefix cannot be validated from the outcome, because a typo and a
 // month with no data both produce a successful run that collects nothing.
-//
-// The ApiClient argument is unused - this data source is S3, not HTTP - so the
-// S3 clients are built from the connection directly.
-func listKiroRemoteScopes(
-	connection *models.KiroConnection,
-	_ plugin.ApiClient,
-	groupId string,
-	_ KiroRemotePagination,
-) (
+func listKiroRemoteScopes(connection *models.KiroConnection, groupId string) (
 	children []dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice],
-	nextPage *KiroRemotePagination,
 	err errors.Error,
 ) {
 	if connection == nil {
-		return nil, nil, errors.BadInput.New("connection is required")
+		return nil, errors.BadInput.New("connection is required")
 	}
 
 	discovery, err := tasks.NewDiscovery(connection)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	accountId, year, err := parseGroupId(groupId)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	switch {
@@ -86,11 +71,11 @@ func listKiroRemoteScopes(
 
 // listAccountGroups is the tree root: the accounts that actually have exports.
 func listAccountGroups(discovery *tasks.Discovery) (
-	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], *KiroRemotePagination, errors.Error,
+	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], errors.Error,
 ) {
 	accounts, err := discovery.ListAccounts()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	entries := make([]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], 0, len(accounts))
@@ -102,7 +87,7 @@ func listAccountGroups(discovery *tasks.Discovery) (
 			FullName: accountId,
 		})
 	}
-	return entries, nil, nil
+	return entries, nil
 }
 
 // listYearGroups lists the years under an account.
@@ -111,11 +96,11 @@ func listAccountGroups(discovery *tasks.Discovery) (
 // scope, because a nil month means "collect the whole year" - which is how a
 // year-long backfill is expressed without creating twelve scopes by hand.
 func listYearGroups(discovery *tasks.Discovery, accountId string) (
-	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], *KiroRemotePagination, errors.Error,
+	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], errors.Error,
 ) {
 	years, err := discovery.ListYears(accountId)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	entries := make([]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], 0, len(years)*2)
@@ -142,16 +127,16 @@ func listYearGroups(discovery *tasks.Discovery, accountId string) (
 			Data:     wholeYear,
 		})
 	}
-	return entries, nil, nil
+	return entries, nil
 }
 
 // listMonthScopes lists the months that hold data for an account and year.
 func listMonthScopes(discovery *tasks.Discovery, accountId string, year int) (
-	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], *KiroRemotePagination, errors.Error,
+	[]dsmodels.DsRemoteApiScopeListEntry[models.KiroS3Slice], errors.Error,
 ) {
 	months, err := discovery.ListMonths(accountId, year)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	parent := fmt.Sprintf("%s/%04d", accountId, year)
@@ -170,7 +155,7 @@ func listMonthScopes(discovery *tasks.Discovery, accountId string, year int) (
 			Data:     slice,
 		})
 	}
-	return entries, nil, nil
+	return entries, nil
 }
 
 // searchKiroRemoteScopes filters the discovered months by substring.
@@ -287,19 +272,34 @@ func parseGroupId(groupId string) (accountId string, year int, err errors.Error)
 }
 
 // RemoteScopes browses the Kiro export layout in S3.
+//
+// Implemented directly rather than through the shared scope-list helper. That
+// helper builds an HTTP client from the connection first, and its constructor
+// runs a DNS check on the endpoint - which fails here, because a bucket name is
+// not a hostname. The helper is built for HTTP data sources; this one is S3.
 // @Summary list available kiro scopes discovered from S3
 // @Description Browse accounts, years and months that actually have exported data
 // @Tags plugins/kiro
 // @Accept application/json
-// @Param connectionId path int false "connection ID"
+// @Param connectionId path int true "connection ID"
 // @Param groupId query string false "account id, or account/year"
-// @Param pageToken query string false "page Token"
 // @Success 200  {object} dsmodels.DsRemoteApiScopeList[models.KiroS3Slice]
 // @Failure 400  {object} shared.ApiBody "Bad Request"
 // @Failure 500  {object} shared.ApiBody "Internal Error"
 // @Router /plugins/kiro/connections/{connectionId}/remote-scopes [GET]
 func RemoteScopes(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, errors.Error) {
-	return raScopeList.Get(input)
+	connection := &models.KiroConnection{}
+	if err := connectionHelper.First(connection, input.Params); err != nil {
+		return nil, err
+	}
+
+	children, err := listKiroRemoteScopes(connection, input.Query.Get("groupId"))
+	if err != nil {
+		return nil, err
+	}
+	return &plugin.ApiResourceOutput{
+		Body: dsmodels.DsRemoteApiScopeList[models.KiroS3Slice]{Children: children},
+	}, nil
 }
 
 // SearchRemoteScopes finds discovered scopes by substring.

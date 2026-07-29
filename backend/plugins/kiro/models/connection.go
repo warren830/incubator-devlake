@@ -103,29 +103,13 @@ func (conn *KiroConn) Sanitize() KiroConn {
 	return *conn
 }
 
-// The three methods below satisfy plugin.ApiConnection, which the scope-browsing
-// helpers require. They are vestigial here: this data source is S3 accessed
-// through the AWS SDK, not an HTTP endpoint. Implementing them lets the plugin
-// reuse the shared scope-discovery plumbing instead of hand-rolling equivalent
-// endpoints.
-
-// Value receivers, because the interface is satisfied by the value type.
+// Deliberately no GetEndpoint/GetProxy/GetRateLimitPerHour here.
 //
-// GetEndpoint returns the bucket as an s3:// URI. Nothing dials it; it exists so
-// the shared helpers have a non-empty identifier to log.
-func (conn KiroConn) GetEndpoint() string {
-	return "s3://" + strings.TrimSpace(conn.Bucket) + "/"
-}
-
-// GetProxy returns empty: AWS SDK proxying is configured through the standard
-// AWS environment variables, not per-connection.
-func (conn KiroConn) GetProxy() string {
-	return ""
-}
-
-func (conn KiroConn) GetRateLimitPerHour() int {
-	return conn.RateLimitPerHour
-}
+// Implementing plugin.ApiConnection would let this type flow into DevLake's
+// shared scope-browsing helpers, but those construct an HTTP client from the
+// endpoint and run a DNS check on it - and a bucket name is not a hostname, so
+// the check fails. Rather than return a fake endpoint that looks dialable, the
+// plugin implements its scope endpoints directly against the AWS SDK.
 
 // KiroConnection holds KiroConn plus ID/Name for database storage
 type KiroConnection struct {
