@@ -27,16 +27,38 @@ import (
 	"github.com/apache/incubator-devlake/plugins/kiro/models"
 )
 
-// parseFunc turns one downloaded object into rows ready for insertion. It is a
-// pure function so it can run on a worker goroutine without touching the
-// database.
-type parseFunc func(data []byte, connectionId uint64, scopeId string) ([]interface{}, errors.Error)
+// parseFunc turns one downloaded object into batches of rows ready for
+// insertion. It is a pure function so it can run on a worker goroutine without
+// touching the database.
+//
+// The result is a slice of batches rather than one flat slice because GORM
+// derives the target table from the element type: a mixed []interface{} fails
+// with "Table not set". A report CSV yields two different models, so each model
+// gets its own homogeneous batch.
+type parseFunc func(data []byte, connectionId uint64, scopeId string) ([]rowBatch, errors.Error)
+
+// rowBatch is a set of rows that all belong to the same table.
+type rowBatch struct {
+	// rows must be a typed slice (e.g. []*models.KiroChatLog), not
+	// []interface{}, so GORM can resolve the table.
+	rows  interface{}
+	count int
+}
 
 // parsedFile is a worker's output, handed to the main goroutine for persistence.
 type parsedFile struct {
-	meta *models.KiroS3FileMeta
-	rows []interface{}
-	err  errors.Error
+	meta    *models.KiroS3FileMeta
+	batches []rowBatch
+	err     errors.Error
+}
+
+// rowCount totals the rows across every batch, for the cursor's record count.
+func (p parsedFile) rowCount() int {
+	total := 0
+	for _, batch := range p.batches {
+		total += batch.count
+	}
+	return total
 }
 
 // pendingFiles returns the files still awaiting extraction for a scope.
@@ -88,9 +110,13 @@ func extractFiles(taskCtx plugin.SubTaskContext, fileType string, parse parseFun
 	scheduler, err := helper.NewWorkerScheduler(
 		taskCtx.GetContext(),
 		data.WorkerCount(),
-		// One tick per second lets the whole pool run without artificial
-		// throttling; S3 sustains far more than this.
-		time.Second,
+		// The tick is a global rate limiter, not a per-worker one: every task
+		// waits for one tick before running, so this value caps total
+		// throughput regardless of pool size. A one-second tick would pin the
+		// whole run to one file per second and leave the pool idle - measured
+		// at 13 seconds for 13 files. Keep it well below the per-object fetch
+		// time so the workers, not the ticker, set the pace.
+		time.Millisecond,
 		logger,
 	)
 	if err != nil {
@@ -108,8 +134,8 @@ func extractFiles(taskCtx plugin.SubTaskContext, fileType string, parse parseFun
 				results <- parsedFile{meta: &meta, err: getErr}
 				return nil
 			}
-			rows, parseErr := parse(body, data.Options.ConnectionId, data.Options.ScopeId)
-			results <- parsedFile{meta: &meta, rows: rows, err: parseErr}
+			batches, parseErr := parse(body, data.Options.ConnectionId, data.Options.ScopeId)
+			results <- parsedFile{meta: &meta, batches: batches, err: parseErr}
 			return nil
 		})
 	}
@@ -148,8 +174,13 @@ func persistFile(db dal.Dal, result parsedFile) errors.Error {
 		return nil
 	}
 
-	if len(result.rows) > 0 {
-		if err := db.CreateOrUpdate(result.rows); err != nil {
+	// Each batch is written separately so GORM sees a typed slice and can
+	// resolve the target table.
+	for _, batch := range result.batches {
+		if batch.count == 0 {
+			continue
+		}
+		if err := db.CreateOrUpdate(batch.rows); err != nil {
 			// A write failure counts as an attempt too, otherwise a row that
 			// cannot be stored would be fetched forever.
 			meta.AttemptCount++
@@ -164,7 +195,7 @@ func persistFile(db dal.Dal, result parsedFile) errors.Error {
 	now := time.Now()
 	meta.Processed = true
 	meta.ProcessedTime = &now
-	meta.RecordCount = len(result.rows)
+	meta.RecordCount = result.rowCount()
 	meta.ErrorMessage = ""
 	if err := db.Update(meta); err != nil {
 		return errors.Default.Wrap(err, "failed to mark kiro file processed")

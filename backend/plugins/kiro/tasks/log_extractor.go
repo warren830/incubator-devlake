@@ -65,26 +65,20 @@ func ExtractKiroCompletionLog(taskCtx plugin.SubTaskContext) errors.Error {
 	return extractFiles(taskCtx, models.FileTypeCompletionLog, parseCompletionLogRows)
 }
 
-func parseChatLogRows(data []byte, connectionId uint64, scopeId string) ([]interface{}, errors.Error) {
+// Both adapters return a single typed batch: the slice keeps its concrete
+// element type so GORM can resolve the table.
+func parseChatLogRows(data []byte, connectionId uint64, scopeId string) ([]rowBatch, errors.Error) {
 	logs, err := ParseChatLog(data, connectionId, scopeId)
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]interface{}, 0, len(logs))
-	for _, log := range logs {
-		rows = append(rows, log)
-	}
-	return rows, nil
+	return []rowBatch{{rows: logs, count: len(logs)}}, nil
 }
 
-func parseCompletionLogRows(data []byte, connectionId uint64, scopeId string) ([]interface{}, errors.Error) {
+func parseCompletionLogRows(data []byte, connectionId uint64, scopeId string) ([]rowBatch, errors.Error) {
 	logs, err := ParseCompletionLog(data, connectionId, scopeId)
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]interface{}, 0, len(logs))
-	for _, log := range logs {
-		rows = append(rows, log)
-	}
-	return rows, nil
+	return []rowBatch{{rows: logs, count: len(logs)}}, nil
 }

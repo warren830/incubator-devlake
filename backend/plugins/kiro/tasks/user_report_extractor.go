@@ -44,23 +44,20 @@ func ExtractKiroUserReport(taskCtx plugin.SubTaskContext) errors.Error {
 	return extractFiles(taskCtx, models.FileTypeReport, parseUserReportRows)
 }
 
-// parseUserReportRows adapts ParseUserReport to the extractor's row interface.
+// parseUserReportRows adapts ParseUserReport to the extractor's batch interface.
 //
-// Both tables are returned from one parse because the per-model counts are
-// columns of the same CSV row; splitting them into two passes would mean parsing
-// every file twice.
-func parseUserReportRows(data []byte, connectionId uint64, scopeId string) ([]interface{}, errors.Error) {
+// Both tables come from one parse because the per-model counts are columns of the
+// same CSV row; splitting them into two passes would mean reading every file
+// twice. They are returned as two batches rather than one mixed slice because
+// GORM resolves the target table from the slice's element type.
+func parseUserReportRows(data []byte, connectionId uint64, scopeId string) ([]rowBatch, errors.Error) {
 	reports, modelMessages, err := ParseUserReport(data, connectionId, scopeId)
 	if err != nil {
 		return nil, err
 	}
 
-	rows := make([]interface{}, 0, len(reports)+len(modelMessages))
-	for _, report := range reports {
-		rows = append(rows, report)
-	}
-	for _, message := range modelMessages {
-		rows = append(rows, message)
-	}
-	return rows, nil
+	return []rowBatch{
+		{rows: reports, count: len(reports)},
+		{rows: modelMessages, count: len(modelMessages)},
+	}, nil
 }

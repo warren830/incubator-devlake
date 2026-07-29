@@ -29,64 +29,76 @@ import (
 	"github.com/apache/incubator-devlake/plugins/kiro/models"
 )
 
-// The row adapters exist so one parse produces everything a file yields; these
+// GORM resolves the destination table from a slice's element type, so every
+// batch must be a typed slice. Passing []interface{} fails at runtime with
+// "Table not set" - a real bug caught only by running against a database, since
+// it type-checks fine. These assertions pin the requirement so a future
+// refactor back to a flat interface slice fails here instead of in production.
+func assertTypedBatch[T any](t *testing.T, batch rowBatch, wantCount int) {
+	t.Helper()
+	rows, ok := batch.rows.([]T)
+	require.True(t, ok, "batch must carry a typed slice, got %T", batch.rows)
+	assert.Len(t, rows, wantCount)
+	assert.Equal(t, wantCount, batch.count)
+}
+
+// The adapters exist so one parse produces everything a file yields; these
 // verify the adaptation rather than the parsing, which is covered directly.
-func TestParseUserReportRows_ReturnsBothTables(t *testing.T) {
+func TestParseUserReportRows_ReturnsTwoTypedBatches(t *testing.T) {
 	data := loadReportFixture(t, "02_standard_cli.csv")
 
-	rows, err := parseUserReportRows(data, testConnectionId, testScopeId)
+	batches, err := parseUserReportRows(data, testConnectionId, testScopeId)
 	require.Nil(t, err)
 
-	var reports, modelMessages int
-	for _, row := range rows {
-		switch row.(type) {
-		case *models.KiroUserReport:
-			reports++
-		case *models.KiroUserModelMessage:
-			modelMessages++
-		default:
-			t.Fatalf("unexpected row type %T", row)
-		}
-	}
-
-	// Both tables come out of a single parse because the per-model counts are
-	// columns of the same CSV row - a second pass would mean reading every file
-	// twice.
-	assert.Equal(t, 1, reports)
-	assert.Equal(t, 1, modelMessages)
+	// Two batches, not one mixed slice: a report CSV yields two different
+	// models, and GORM cannot infer a table from a heterogeneous slice.
+	require.Len(t, batches, 2)
+	assertTypedBatch[*models.KiroUserReport](t, batches[0], 1)
+	assertTypedBatch[*models.KiroUserModelMessage](t, batches[1], 1)
 }
 
 func TestParseLogRows(t *testing.T) {
 	t.Run("chat log", func(t *testing.T) {
-		rows, err := parseChatLogRows(loadLogFixture(t, "chat_03_two_records.json.gz"), testConnectionId, testScopeId)
+		batches, err := parseChatLogRows(loadLogFixture(t, "chat_03_two_records.json.gz"), testConnectionId, testScopeId)
 		require.Nil(t, err)
-		require.Len(t, rows, 2)
-		for _, row := range rows {
-			_, ok := row.(*models.KiroChatLog)
-			assert.True(t, ok)
-		}
+		require.Len(t, batches, 1)
+		assertTypedBatch[*models.KiroChatLog](t, batches[0], 2)
 	})
 
 	t.Run("completion log", func(t *testing.T) {
-		rows, err := parseCompletionLogRows(loadLogFixture(t, "completion_01_non_empty.json.gz"), testConnectionId, testScopeId)
+		batches, err := parseCompletionLogRows(loadLogFixture(t, "completion_01_non_empty.json.gz"), testConnectionId, testScopeId)
 		require.Nil(t, err)
-		require.Len(t, rows, 1)
-		_, ok := rows[0].(*models.KiroCompletionLog)
-		assert.True(t, ok)
+		require.Len(t, batches, 1)
+		assertTypedBatch[*models.KiroCompletionLog](t, batches[0], 1)
 	})
 
 	// A record with no completions still produces a row: those records are the
 	// denominator for what Kiro offered versus what was taken.
 	t.Run("empty completions still produce a row", func(t *testing.T) {
-		rows, err := parseCompletionLogRows(loadLogFixture(t, "completion_02_empty.json.gz"), testConnectionId, testScopeId)
+		batches, err := parseCompletionLogRows(loadLogFixture(t, "completion_02_empty.json.gz"), testConnectionId, testScopeId)
 		require.Nil(t, err)
-		assert.Len(t, rows, 1)
+		require.Len(t, batches, 1)
+		assertTypedBatch[*models.KiroCompletionLog](t, batches[0], 1)
 	})
 
 	t.Run("parse failure propagates", func(t *testing.T) {
 		_, err := parseChatLogRows([]byte("not gzipped"), testConnectionId, testScopeId)
 		assert.NotNil(t, err)
 	})
+}
+
+// The scheduler's tick is a global rate limiter rather than a per-worker one:
+// every submitted task waits one tick before running, so the interval caps total
+// throughput no matter how large the pool is. A one-second tick pinned a real run
+// to one file per second - 13 seconds for 13 files, with 20 workers idle.
+func TestSchedulerTickDoesNotThrottleThePool(t *testing.T) {
+	source, err := os.ReadFile("extractor.go")
+	require.NoError(t, err)
+
+	tick := regexp.MustCompile(`NewWorkerScheduler\((?s:.*?)time\.(\w+),`).FindStringSubmatch(string(source))
+	require.NotNil(t, tick, "expected a tick interval passed to NewWorkerScheduler")
+	assert.Equal(t, "Millisecond", tick[1],
+		"a coarser tick throttles the whole pool to one object per tick")
 }
 
 // Twenty workers inserting into one table concurrently deadlock on MySQL gap
