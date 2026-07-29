@@ -12,7 +12,7 @@
 
 老版本 Amazon Q Developer 下线，公司改用 Kiro。现有 `q_dev` 插件按老版 Q Developer 的数据格式实现，与 Kiro 企业版实际产出的数据存在多处不一致（详见 §3、§7）。
 
-决定：**新建独立的 `kiro` 插件，`q_dev` 保留并冻结**。
+决定：**新建独立的 `kiro` 插件；`q_dev` 保留、冻结、本项目不修改它**。
 
 不共享代码。依据两点：
 
@@ -57,6 +57,16 @@
 Kiro 控制台 dashboard 无公开 API，但 IAM 权限列表含 `q:ListDashboardMetrics`，暗示存在可调接口。它唯一提供而 `user_report` 无法计算的是 **total / pending subscriptions per tier**（买了但从未激活的席位）。
 
 接口形状未文档化，需实测。列为 v2 候选，不阻塞 v1。
+
+### 2.4 明确不在范围内
+
+| 项 | 说明 |
+|---|---|
+| **修改 `q_dev`** | `q_dev` 保留、冻结、不做任何改动，包括 §7 中列出的那些缺陷。本项目只保证 `kiro` 正确。 |
+| `by_user_analytic` 采集 | 见 §2.2 |
+| domain layer 建模 | `kiro` 只写 `_tool_kiro_*`，不写 domain layer。跨工具 AI 语义统一是独立课题 |
+| AI 提效归因与看板 | 见 §10，独立立项 |
+| Kiro Hooks 采集 | 客户端可关闭、可篡改，且与本插件的 S3 采集是不同的信任模型。见 §10.2 |
 
 ---
 
@@ -487,13 +497,17 @@ GET + 解析 + 落库（单文件一个事务）
 
 ---
 
-## 7. 修正 `q_dev` 的现存问题
+## 7. 关键实现约束
 
-以下问题在 `q_dev` 中存在，`kiro` 不复制。
+以下是 `kiro` 必须满足的硬约束。每条附上判断依据 —— 依据多来自 `q_dev` 的现有实现，因为那是同类数据源在本仓库唯一的实战样本，它踩过的坑就是本插件的约束来源。
 
-### 7.1 增量游标查询走无索引列（严重）
+> **`q_dev` 不在本文档范围内，不做任何修改。** 引用它仅为说明约束的成因。
 
-`q_dev/tasks/s3_file_collector.go:70`：
+### 7.1 增量游标必须按主键查询（严重）
+
+**约束**：`s3_file_meta` 的存在性检查必须走主键，主键即 `(connection_id, s3_path)`。
+
+**依据** —— `q_dev/tasks/s3_file_collector.go:70`：
 
 ```go
 db.First(existingFile, dal.Where("connection_id = ? AND s3_path = ?", ...))
@@ -509,19 +523,21 @@ S3Path       string `gorm:"type:varchar(512)"`              // 无索引
 
 主键是 `(connection_id, file_name)`，查询按 `s3_path`，而该列无任何索引。在 730 万行规模下，每个文件的存在性检查都要扫该 connection 下的全部行 —— 2 万文件/天 × 700 万行扫描，任务无法完成。
 
-此类 bug 的形态值得记住：**模型的索引声明与查询条件不一致**。它在小数据量下完全不可见，到千万行才暴露，且表现为"任务跑不完"而非报错。
+此类缺陷的形态值得记住：**模型的索引声明与查询条件不一致**。它在小数据量下完全不可见，到千万行才暴露，且表现为"任务跑不完"而非报错。
 
-**修正**：主键改为 `(connection_id, s3_path)`，查询按主键。
+**实现要求**：主键 `(connection_id, s3_path)`，查询条件与主键逐列对齐。Code review 时对照模型的索引声明检查每一处 DAL 查询。
 
-### 7.2 完整 S3 key 塞进 varchar(255)
+### 7.2 完整 S3 key 不得存入 varchar(255)
 
-同一位置，collector 把完整 S3 key 赋给 `FileName`（`varchar(255)`），而非 basename。当前 key 长约 155 字符尚可，前缀再长即会截断或插入失败。
+**约束**：`file_name` 存 basename（`varchar(255)`），`s3_path` 存完整 key（`varchar(512)`）。
 
-**修正**：`file_name` 存 basename，`s3_path` 存完整 key（`varchar(512)`）。
+**依据**：`q_dev` 的 collector 把完整 S3 key 赋给了 `FileName`（`varchar(255)`）。当前 key 长约 155 字符尚可，前缀再长即会截断或插入失败。
 
-### 7.3 无数据源的字段
+### 7.3 不建没有数据源的字段
 
-`q_dev` 的 `QDevChatLog` 含以下字段，但实测 payload 中不存在对应数据源：
+**约束**：字段必须有实测可见的数据源，不得依据官方文档建列。
+
+**依据**：`q_dev` 的 `QDevChatLog` 含以下字段，但实测 payload 中不存在对应数据源：
 
 | 字段 | 实测 |
 |---|---|
@@ -530,11 +546,13 @@ S3Path       string `gorm:"type:varchar(512)"`              // 无索引
 | `has_steering` | 靠 `strings.Contains(prompt, ".kiro/steering")`，prompt 为空时恒 false |
 | `is_spec_mode` | 同上 |
 
-**修正**：`open_file_count` 不建；`active_file_name` 不建（无路径来源，且 §3.3 显示 completion log 的 `fileName` 亦无路径）；`has_steering` / `is_spec_mode` 保留但改为 nullable，仅 `has_prompt=true` 时赋值。
+**实现要求**：`open_file_count` 不建；`active_file_name` 不建（无路径来源，且 §3.3 显示 completion log 的 `fileName` 亦无路径）；`has_steering` / `is_spec_mode` 建为 nullable，仅 `has_prompt=true` 时赋值，否则 NULL。
 
-### 7.4 逐文件数据库往返
+### 7.4 文件发现必须批处理
 
-见 §6.2。
+**约束**：按 S3 listing 分页批量查询与插入，见 §6.2。
+
+**依据**：`q_dev` 采用每文件一次 `SELECT` + 一次 `INSERT`，在 2 万文件/天的规模下是 4 万次数据库往返。
 
 ---
 
