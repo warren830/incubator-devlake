@@ -42,8 +42,11 @@ import (
 // @Router /plugins/kiro/test [POST]
 func TestConnection(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, errors.Error) {
 	var connection models.KiroConnection
+	// Wrapped as BadInput: a struct-tag validation failure is the caller's
+	// problem, and an unwrapped Decode error surfaces as HTTP 500 - which sends
+	// the user looking at server logs instead of at their own form.
 	if err := api.Decode(input.Body, &connection, vld); err != nil {
-		return nil, err
+		return nil, errors.BadInput.Wrap(err, "invalid connection payload")
 	}
 	if err := validateConnection(&connection.KiroConn); err != nil {
 		return nil, errors.BadInput.Wrap(err, "connection validation failed")
@@ -73,7 +76,7 @@ func TestExistingConnection(input *plugin.ApiResourceInput) (*plugin.ApiResource
 		return nil, errors.BadInput.Wrap(err, "find connection from db")
 	}
 	if err := api.DecodeMapStruct(input.Body, connection, false); err != nil {
-		return nil, err
+		return nil, errors.BadInput.Wrap(err, "invalid connection payload")
 	}
 	if err := testConnection(connection); err != nil {
 		return nil, err

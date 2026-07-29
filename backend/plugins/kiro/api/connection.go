@@ -37,8 +37,10 @@ import (
 // @Router /plugins/kiro/connections [POST]
 func PostConnections(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, errors.Error) {
 	connection := &models.KiroConnection{}
+	// Wrapped as BadInput so a struct-tag validation failure reports 400 rather
+	// than 500 - the difference between "fix your input" and "the server broke".
 	if err := api.Decode(input.Body, connection, vld); err != nil {
-		return nil, err
+		return nil, errors.BadInput.Wrap(err, "invalid connection payload")
 	}
 	if err := validateConnection(&connection.KiroConn); err != nil {
 		return nil, errors.BadInput.Wrap(err, "connection validation failed")
