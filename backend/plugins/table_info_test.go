@@ -44,6 +44,7 @@ import (
 	issueTrace "github.com/apache/incubator-devlake/plugins/issue_trace/impl"
 	jenkins "github.com/apache/incubator-devlake/plugins/jenkins/impl"
 	jira "github.com/apache/incubator-devlake/plugins/jira/impl"
+	kiro "github.com/apache/incubator-devlake/plugins/kiro/impl"
 	linear "github.com/apache/incubator-devlake/plugins/linear/impl"
 	linker "github.com/apache/incubator-devlake/plugins/linker/impl"
 	opsgenie "github.com/apache/incubator-devlake/plugins/opsgenie/impl"
@@ -111,6 +112,7 @@ func Test_GetPluginTablesInfo(t *testing.T) {
 	checker.FeedIn("linker/models", linker.Linker{}.GetTablesInfo)
 	checker.FeedIn("issue_trace/models", issueTrace.IssueTrace{}.GetTablesInfo)
 	checker.FeedIn("q_dev/models", q_dev.QDev{}.GetTablesInfo)
+	checker.FeedIn("kiro/models", kiro.Kiro{}.GetTablesInfo)
 	checker.FeedIn("gh-copilot/models", copilot.GhCopilot{}.GetTablesInfo)
 	err := checker.Verify()
 	if err != nil {
