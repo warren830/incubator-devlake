@@ -18,6 +18,7 @@ limitations under the License.
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -35,7 +36,7 @@ import (
 // @Description Test kiro connection
 // @Tags plugins/kiro
 // @Param body body models.KiroConn true "json body"
-// @Success 200  {object} plugin.ApiResourceOutput
+// @Success 200  {object} ConnectionReport
 // @Failure 400  {object} shared.ApiBody "Bad Request"
 // @Failure 500  {object} shared.ApiBody "Internal Error"
 // @Router /plugins/kiro/test [POST]
@@ -50,7 +51,10 @@ func TestConnection(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, 
 	if err := testConnection(&connection); err != nil {
 		return nil, err
 	}
-	return &plugin.ApiResourceOutput{Status: http.StatusOK}, nil
+	return &plugin.ApiResourceOutput{
+		Body:   buildConnectionReport(&connection),
+		Status: http.StatusOK,
+	}, nil
 }
 
 // TestExistingConnection validates a saved connection, optionally with overrides
@@ -59,7 +63,7 @@ func TestConnection(input *plugin.ApiResourceInput) (*plugin.ApiResourceOutput, 
 // @Description Test existing kiro connection
 // @Tags plugins/kiro
 // @Param id path int true "connection ID"
-// @Success 200  {object} plugin.ApiResourceOutput
+// @Success 200  {object} ConnectionReport
 // @Failure 400  {object} shared.ApiBody "Bad Request"
 // @Failure 500  {object} shared.ApiBody "Internal Error"
 // @Router /plugins/kiro/connections/{id}/test [POST]
@@ -74,7 +78,94 @@ func TestExistingConnection(input *plugin.ApiResourceInput) (*plugin.ApiResource
 	if err := testConnection(connection); err != nil {
 		return nil, err
 	}
-	return &plugin.ApiResourceOutput{Status: http.StatusOK}, nil
+	return &plugin.ApiResourceOutput{
+		Body:   buildConnectionReport(connection),
+		Status: http.StatusOK,
+	}, nil
+}
+
+// ConnectionReport describes what the connection can actually see.
+//
+// A bare success/failure verdict is not enough to tell whether a configuration
+// is right, because a wrong prefix and a genuinely empty period produce the same
+// outcome: collection runs, finds nothing, and reports success. Returning the
+// discovered accounts and per-stream object counts makes the difference visible
+// before any scope is created.
+type ConnectionReport struct {
+	ReportBucket    string `json:"reportBucket"`
+	PromptLogBucket string `json:"promptLogBucket"`
+	// Accounts are the AWS account ids found under the report prefix. An empty
+	// list is the clearest sign that the bucket or prefix is wrong.
+	Accounts []string `json:"accounts"`
+	// Streams reports object counts for the most recent discovered period.
+	Streams []tasks.StreamCount `json:"streams"`
+	// Hint explains an empty result in plain terms.
+	Hint string `json:"hint,omitempty"`
+}
+
+// connectionReportCountLimit caps counting so the check stays fast on a bucket
+// holding hundreds of thousands of objects. The exact number does not matter for
+// verifying a path - only whether it is zero.
+const connectionReportCountLimit = 500
+
+// buildConnectionReport probes the layout and summarizes what was found.
+//
+// Errors are folded into the report rather than returned: the connection itself
+// is already known to work at this point, and a discovery failure is more useful
+// shown as an empty result with a hint than as a failed request.
+func buildConnectionReport(connection *models.KiroConnection) *ConnectionReport {
+	report := &ConnectionReport{
+		ReportBucket:    connection.Bucket,
+		PromptLogBucket: connection.GetPromptLogBucket(),
+		Accounts:        []string{},
+		Streams:         []tasks.StreamCount{},
+	}
+
+	discovery, err := tasks.NewDiscovery(connection)
+	if err != nil {
+		report.Hint = "could not initialise S3 discovery: " + err.Error()
+		return report
+	}
+
+	accounts, err := discovery.ListAccounts()
+	if err != nil {
+		report.Hint = "could not list accounts under the report prefix: " + err.Error()
+		return report
+	}
+	report.Accounts = accounts
+
+	if len(accounts) == 0 {
+		report.Hint = fmt.Sprintf(
+			"no account directories under s3://%s/%s/AWSLogs/ - check the bucket and report prefix",
+			connection.Bucket, connection.GetReportPrefix())
+		return report
+	}
+
+	// Probe the newest period that exists, since that is where data is most
+	// likely to be and therefore the most informative check.
+	accountId := accounts[len(accounts)-1]
+	years, err := discovery.ListYears(accountId)
+	if err != nil || len(years) == 0 {
+		report.Hint = fmt.Sprintf(
+			"account %s has no year directories - check the region in the connection", accountId)
+		return report
+	}
+	year := years[len(years)-1]
+
+	var month *int
+	if months, monthErr := discovery.ListMonths(accountId, year); monthErr == nil && len(months) > 0 {
+		latest := months[len(months)-1]
+		month = &latest
+	}
+
+	report.Streams = discovery.CountStreams(accountId, year, month, connectionReportCountLimit)
+
+	period := fmt.Sprintf("%04d", year)
+	if month != nil {
+		period = fmt.Sprintf("%04d-%02d", year, *month)
+	}
+	report.Hint = fmt.Sprintf("counts are for account %s, period %s", accountId, period)
+	return report
 }
 
 // testConnection issues a real request against every bucket in use.

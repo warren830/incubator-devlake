@@ -19,6 +19,8 @@ package tasks
 
 import (
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -91,6 +93,105 @@ func (c *KiroS3Clients) Buckets() []string {
 		return []string{c.Report.Bucket}
 	}
 	return []string{c.Report.Bucket, c.PromptLog.Bucket}
+}
+
+// ListSubPrefixes returns the immediate child "directories" under a prefix.
+//
+// Kiro's export layout is fully self-describing - accounts, years and months all
+// appear as path segments - so this is what lets a scope be picked from what
+// actually exists instead of typed by hand. A mistyped prefix is otherwise
+// indistinguishable from a month with no data: collection succeeds and finds
+// nothing either way.
+//
+// Uses a delimiter so S3 returns only the segment names, not every object
+// beneath them.
+func (c *KiroS3Client) ListSubPrefixes(prefix string) ([]string, errors.Error) {
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	var names []string
+	var continuationToken *string
+	for {
+		output, err := c.S3.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket:            aws.String(c.Bucket),
+			Prefix:            aws.String(prefix),
+			Delimiter:         aws.String("/"),
+			ContinuationToken: continuationToken,
+		})
+		if err != nil {
+			return nil, errors.Convert(err)
+		}
+
+		for _, common := range output.CommonPrefixes {
+			if common.Prefix == nil {
+				continue
+			}
+			// Strip the queried prefix and the trailing slash to leave just the
+			// segment name.
+			name := strings.TrimSuffix(strings.TrimPrefix(*common.Prefix, prefix), "/")
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+
+		if output.IsTruncated == nil || !*output.IsTruncated {
+			break
+		}
+		continuationToken = output.NextContinuationToken
+	}
+
+	sort.Strings(names)
+	return names, nil
+}
+
+// CountObjects reports how many collectable objects sit under a prefix.
+//
+// This is what turns "did I get the path right?" into an answerable question:
+// the connection test reports these counts per stream, so a wrong prefix shows
+// as zero before any scope is created.
+//
+// Counting stops at limit to keep the check cheap; the returned bool reports
+// whether more objects remain.
+func (c *KiroS3Client) CountObjects(prefix string, limit int) (int, bool, errors.Error) {
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
+	count := 0
+	var continuationToken *string
+	for {
+		output, err := c.S3.ListObjectsV2(&s3.ListObjectsV2Input{
+			Bucket:            aws.String(c.Bucket),
+			Prefix:            aws.String(prefix),
+			ContinuationToken: continuationToken,
+		})
+		if err != nil {
+			return 0, false, errors.Convert(err)
+		}
+
+		for _, object := range output.Contents {
+			if object.Key == nil {
+				continue
+			}
+			// Same filter the collector applies, so the count reflects what
+			// would actually be collected rather than every object present.
+			if !strings.HasSuffix(*object.Key, ".csv") && !strings.HasSuffix(*object.Key, ".json.gz") {
+				continue
+			}
+			count++
+			if limit > 0 && count >= limit {
+				return count, true, nil
+			}
+		}
+
+		if output.IsTruncated == nil || !*output.IsTruncated {
+			break
+		}
+		continuationToken = output.NextContinuationToken
+	}
+
+	return count, false, nil
 }
 
 // GetObjectBytes downloads an object in full.

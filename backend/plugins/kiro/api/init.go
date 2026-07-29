@@ -35,6 +35,9 @@ var (
 	// and uniform across an organization, so there is nothing per-scope to
 	// configure.
 	dsHelper *api.DsHelper[models.KiroConnection, models.KiroS3Slice, srvhelper.NoScopeConfig]
+
+	raProxy     *api.DsRemoteApiProxyHelper[models.KiroConnection]
+	raScopeList *api.DsRemoteApiScopeListHelper[models.KiroConnection, models.KiroS3Slice, KiroRemotePagination]
 )
 
 func Init(br context.BasicRes, p plugin.PluginMeta) {
@@ -57,4 +60,12 @@ func Init(br context.BasicRes, p plugin.PluginMeta) {
 		func(s models.KiroS3Slice) models.KiroS3Slice { return s.Sanitize() },
 		nil,
 	)
+
+	// Scope browsing reads the export layout straight out of S3, so a scope is
+	// picked rather than typed. That removes the failure mode where a mistyped
+	// prefix is indistinguishable from a month with no data.
+	raProxy = api.NewDsRemoteApiProxyHelper[models.KiroConnection](dsHelper.ConnApi.ModelApiHelper)
+	raScopeList = api.NewDsRemoteApiScopeListHelper[
+		models.KiroConnection, models.KiroS3Slice, KiroRemotePagination,
+	](raProxy, listKiroRemoteScopes)
 }

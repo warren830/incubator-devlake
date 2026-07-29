@@ -184,6 +184,14 @@ func (p Kiro) ApiResources() map[string]map[string]plugin.ApiResourceHandler {
 		"connections/:connectionId/test": {
 			"POST": api.TestExistingConnection,
 		},
+		// Scope discovery: lists the accounts, years and months that actually
+		// have exported data, so a scope is selected instead of hand-entered.
+		"connections/:connectionId/remote-scopes": {
+			"GET": api.RemoteScopes,
+		},
+		"connections/:connectionId/search-remote-scopes": {
+			"GET": api.SearchRemoteScopes,
+		},
 		"connections/:connectionId/scopes": {
 			"GET": api.GetScopeList,
 			"PUT": api.PutScopes,

@@ -103,6 +103,30 @@ func (conn *KiroConn) Sanitize() KiroConn {
 	return *conn
 }
 
+// The three methods below satisfy plugin.ApiConnection, which the scope-browsing
+// helpers require. They are vestigial here: this data source is S3 accessed
+// through the AWS SDK, not an HTTP endpoint. Implementing them lets the plugin
+// reuse the shared scope-discovery plumbing instead of hand-rolling equivalent
+// endpoints.
+
+// Value receivers, because the interface is satisfied by the value type.
+//
+// GetEndpoint returns the bucket as an s3:// URI. Nothing dials it; it exists so
+// the shared helpers have a non-empty identifier to log.
+func (conn KiroConn) GetEndpoint() string {
+	return "s3://" + strings.TrimSpace(conn.Bucket) + "/"
+}
+
+// GetProxy returns empty: AWS SDK proxying is configured through the standard
+// AWS environment variables, not per-connection.
+func (conn KiroConn) GetProxy() string {
+	return ""
+}
+
+func (conn KiroConn) GetRateLimitPerHour() int {
+	return conn.RateLimitPerHour
+}
+
 // KiroConnection holds KiroConn plus ID/Name for database storage
 type KiroConnection struct {
 	helper.BaseConnection `mapstructure:",squash"`
