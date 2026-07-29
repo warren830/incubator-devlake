@@ -52,11 +52,15 @@
 
 **可逆性**：AWS 持续向 S3 写入该报表，S3 不删除历史。scope 是"账号+年+月"时间切片，将来若要采集，重跑历史月份即可全量回补。此决定不造成数据丢失。
 
-### 2.3 v2 候选：dashboard metrics
+### 2.3 已排除：dashboard metrics
 
 Kiro 控制台 dashboard 无公开 API，但 IAM 权限列表含 `q:ListDashboardMetrics`，暗示存在可调接口。它唯一提供而 `user_report` 无法计算的是 **total / pending subscriptions per tier**（买了但从未激活的席位）。
 
-接口形状未文档化，需实测。列为 v2 候选，不阻塞 v1。
+**实测结论（2026-07-29）：标准 AWS SDK 不可达。** botocore 的服务模型中只有 `qapps` / `qbusiness` / `qconnect` / `quicksight`，没有 `q`。调用 `q:ListDashboardMetrics` 需要手写 SigV4 请求打未公开端点。
+
+因此**降级为"暂不采用"**，不再列为 v2 计划项。理由：依赖未公开且无服务模型的接口，意味着请求/响应结构无契约、随时可能变更且无迁移通知 —— 对一个要长期运行的采集器是不可接受的基础。
+
+若确实需要 total / pending subscriptions（ROI 分母侧的席位数），更可靠的替代路径是 AWS 账单数据或 `user-subscriptions:ListUserSubscriptions`（该 API 在 IAM 文档中有记载，需另行验证其 SDK 可达性）。
 
 ### 2.4 明确不在范围内
 
@@ -72,9 +76,11 @@ Kiro 控制台 dashboard 无公开 API，但 IAM 权限列表含 `q:ListDashboar
 
 ## 3. 实测数据源 schema
 
-> **重要**：以下全部来自真实样本，非官方文档。官方文档在 chat log 上已被证明与实际不符（文档列出 6 个字段实际不存在）。
+> **重要**：以下全部来自真实样本，非官方文档。官方文档已被证明在两个方向上都不准：**文档有而实际无**（chat log 的 5 个字段）、**实际有而文档无**（`KIRO_WEB` client type）。
 >
-> 采样环境：AWS 账号 `034362076319`，bucket `s3://ychchen-q-dev/`。
+> 采样环境：AWS 账号 `034362076319`，bucket `s3://ychchen-q-dev/`。采样规模见附录 A。
+>
+> **每个字段均标注实测出现率。** 出现率不是学术性注释 —— `modelId` 只有 45%，按 100% 假设使用会导致系统性偏差（§3.2）。
 
 ### 3.1 `user_report` CSV
 
@@ -116,51 +122,107 @@ Date,UserId,Client_Type,Chat_Conversations,Credits_Used,Overage_Cap,Overage_Cred
 
 **动态列解析规则**：遍历表头，凡匹配 `(?i)^(.+)_messages$` 者视为 per-model 计数，`model_name` 取捕获组。
 
-> **必须显式排除 `Total_Messages`**。该列名同样匹配上述正则，会被误解析为一个名叫 `Total` 的模型，且其值恰好等于所有模型之和 —— 下游做占比分析时会得到看似合理的错误结果（如恒定 50%），极难发现。
+> **必须显式排除 `Total_Messages`**。该列名同样匹配上述正则，会被误解析为一个名叫 `Total` 的模型，且其值恰好等于所有模型之和 —— 下游做占比分析时会得到看似合理的错误结果（如恒定 50%），极难发现。实测 107/107 个文件均含该列。
+
+### 3.1.1 表头漂移（重要）
+
+**全量扫描 107 个 CSV（2026-02-10 ~ 2026-07-27）得到 19 种不同的表头。** schema 在持续变化，且变化方式不止"加列"。
+
+**稳定部分**：前 11 列在 19 种变体中完全一致且顺序固定：
+
+```
+Date, UserId, Client_Type, Chat_Conversations, Credits_Used, Overage_Cap,
+Overage_Credits_Used, Overage_Enabled, ProfileId, Subscription_Tier, Total_Messages
+```
+
+**不稳定部分** —— `Total_Messages` 之后的一切：
+
+| 现象 | 实测证据 |
+|---|---|
+| `User_Email` 是后加的 | 最早的变体完全没有此列。**必须 nullable**，历史数据回补时该列为空 |
+| `New_User` 是后加的，且比 `User_Email` 更早出现 | 存在只有 `New_User` 没有 `User_Email` 的变体。**必须 nullable** |
+| **列顺序会变** | `New_User` 有时紧跟 `Total_Messages`，有时排在所有模型列**之后**（如 `...,Total_Messages,auto_messages,claude_opus_4.6_messages,New_User`）|
+| 模型列数量 0~3 | 单文件最多观测到 3 个 |
+
+**结论：按列名映射是硬性要求，任何位置假设都会出错。** 未知列必须忽略而非报错。
+
+### 3.1.2 全量实测的取值域
+
+| 维度 | 实测值 |
+|---|---|
+| **`Client_Type`** | `KIRO_CLI`(40 文件)、`KIRO_IDE`(59)、**`KIRO_WEB`(7)**、`PLUGIN`(1) —— **`KIRO_WEB` 官方文档未提及** |
+| **`Subscription_Tier`** | `POWER`(84)、`PRO_PLUS`(24) —— 格式为 **UPPER_SNAKE**，非文档所写的 `Power` / `ProPlus` |
+| **模型/模式（去重 8 个）** | `claude_opus_4.8`(28)、`claude_opus_4.6`(28)、`auto`(10)、`gpt_5.6_sol`(7)、`claude_opus_4.7`(5)、`simple_task`(2)、`claude_opus_5`(2)、`claude_sonnet_4.6`(1) |
+| 数据行数 | 106 个文件 1 行，1 个文件 2 行（含 2 个不同用户）→ 多用户解析路径真实存在 |
+| 去重用户 | 2 个真实用户 |
+
+**注意 `auto` 与 `simple_task` 不是模型**，是路由模式。因此 `model_name` 这一列实际承载"模型或路由目标"，命名上略有偏差但保留，因为上游就是这么给的。
+
+### 3.1.3 格式漂移（会导致静默错误）
+
+| 漂移 | 实测证据 | 处理 |
+|---|---|---|
+| **`UserId` 有时带 `d-{identityStoreId}.` 前缀** | 3 个文件确认（2026-03-10 CLI+IDE、2026-03-12 IDE）：`d-9067deb161.6478a4a8-...`；其余文件为裸 UUID | **CSV 也必须做前缀剥离**，否则同一个人被拆成两行，per-person 聚合全错且不报错 |
+| 布尔值大小写不一致 | `TRUE`（3 月）vs `true`（7 月）| 大小写无关解析 |
+| 引号不一致 | 3 月的 `UserId` / `ProfileId` 无引号，7 月有 | 标准 CSV reader 自动处理，无需特殊代码 |
+| `Overage_Credits_Used` 会非零 | KIRO_WEB 2026-06-21 = `1.281141613432836` | 不可假设恒为 0 |
+
+**可用作校验的不变式**：同一行内，所有模型列之和 = `Total_Messages`。实测成立（`212+28=240`、`9+7=16`、`22=22`）。可作为解析正确性的断言，但**不要跨报表断言**（见 §6.6）。
 
 ### 3.2 `GenerateAssistantResponse`（chat 日志）
 
-**采样规模**：105 个文件 / 118 条记录（2026-07-27 23 时全量）。全天：**627 个对象 / 292,141 字节**。
+**全量规模**：18,412 个对象 / 12,807,821 字节，横跨 2026-01 ~ 2026-07（均值 695 字节/文件）。
 
-**记录数分布**：92 个文件含 1 条，13 个文件含 2 条（均值 1.12）。
+**按月分布**：01 月 3755、02 月 2182、03 月 1575、04 月 503、05 月 5072、06 月 248、07 月 1259。
 
-**字段并集 —— 只有 7 个，且 118/118 全部存在**：
+**采样规模**：**4,530 条记录 / 4,506 个文件**，取 2026 年 01 / 04 / 06 三个月全量（占总量 25%）。另有 2026-07-27 23 时的 118 条用于单日细节核对。
+
+**记录数分布**：单日样本中 92 个文件含 1 条、13 个含 2 条；宽样本均值 1.005 条/文件。
+
+**字段并集及出现率（4,530 条）**：
+
+| 字段 | 出现率 | 结论 |
+|---|---|---|
+| `Request.prompt` | 4530/4530 = 100% | 必有（但常为空串，见下）|
+| `Request.chatTriggerType` | 4530/4530 = 100% | 必有 |
+| `Request.userId` | 4530/4530 = 100% | 必有 |
+| `Request.timeStamp` | 4530/4530 = 100% | 必有 |
+| `Response.assistantResponse` | 4530/4530 = 100% | 必有 |
+| `Response.requestId` | 4530/4530 = 100% | 必有 |
+| **`Response.followupPrompts`** | **4072/4530 = 90%** | **存在！** 单日样本中恰好 0/118，扩大样本后证明存在 |
+| **`Request.modelId`** | **2027/4530 = 45%** | **过半缺失，必须 nullable** |
+
+**0/4530 出现的字段**（官方文档列出，实测跨 3 个月从未出现）：
 
 ```
-generateAssistantResponseEventRequest.prompt
-generateAssistantResponseEventRequest.chatTriggerType
-generateAssistantResponseEventRequest.userId
-generateAssistantResponseEventRequest.timeStamp
-generateAssistantResponseEventRequest.modelId
-generateAssistantResponseEventResponse.assistantResponse
-generateAssistantResponseEventResponse.requestId
-```
-
-**官方文档列出但 0/118 出现的字段**：
-
-```
-messageMetadata.conversationId      ← 无 session 分组能力
+messageMetadata.conversationId      ← 确认无 session 分组能力
 messageMetadata.utteranceId
-customizationArn
-followupPrompts
+customizationArn                    ← 注意 GenerateCompletions 中存在，仅 chat 日志无
 codeReferenceEvents
 supplementaryWebLinksEvent
 ```
 
-**实测值分布**：
+**实测值分布（4,530 条）**：
 
 | 字段 | 分布 |
 |---|---|
-| `prompt` 长度 | **102/118 = 0（空）**；16/118 有内容，长度 1236 / 1282 / 1363 / 1369 / 1920 / 1928 / 2007 / 2015 |
-| `chatTriggerType` | 118/118 = `MANUAL` |
-| `modelId` | 118/118 = `claude-opus-5` |
-| `userId` | `d-9067deb161.6478a4a8-60a1-70d9-37bc-6aae85f6746a`（49 字符）|
+| `prompt` 空值率 | **3209 空 / 1321 非空 = 71% 为空**。（单日样本为 86%，宽样本更具代表性）|
+| `chatTriggerType` | **4530/4530 = `MANUAL`。3 个月内 `INLINE_CHAT` 从未出现** |
+| `modelId`（仅计存在的 2027 条）| `claude-opus-4.5`(975)、`claude-opus-4.6`(387)、`auto`(298)、`simple-task`(238)、`claude-opus-4.8`(122)、`claude-sonnet-4.6`(7) |
+| `userId` | `d-9067deb161.6478a4a8-...`（49 字符），恒带前缀 |
 | `timeStamp` | `2026-07-27T23:03:29.027400929Z`（**纳秒精度**）|
 | `requestId` | UUID（36 字符）|
+| 非空 `prompt` 长度（单日样本）| 1236 / 1282 / 1363 / 1369 / 1920 / 1928 / 2007 / 2015 |
 
-**`prompt` 空值的含义**：空 prompt 对应 agent 自主续轮（工具调用返回后继续推理），非空 prompt 对应用户真正开口。该区分产生一个派生字段 `has_prompt`，其比值（本样本约 102:16 ≈ 6.4）反映 agent 自主程度。
+**两个由此产生的实现约束**：
 
-**`userId` 格式差异**：日志中带 `d-{identityStoreId}.` 前缀，CSV 中是裸 UUID。
+1. **`model_id` 不能用于模型归因。** 45% 的覆盖率意味着任何"各模型消息占比"的计算都会系统性偏差。模型归因的权威来源是 CSV 的 `{model}_messages` 动态列（§3.1），日志的 `modelId` 仅作辅助。
+
+2. **日志与 CSV 的模型名分隔符不同**：日志用连字符（`claude-opus-4.6`、`simple-task`），CSV 用下划线（`claude_opus_4.6_messages`、`simple_task_messages`）。两者若要关联，必须先归一化分隔符。
+
+**`prompt` 空值的含义**：空 prompt 对应 agent 自主续轮（工具调用返回后继续推理），非空 prompt 对应用户真正开口。该区分产生派生字段 `has_prompt`，其比值（实测 3209:1321 ≈ **2.43**）反映 agent 自主程度，见 §10.4。
+
+**`userId` 格式差异**：日志中**恒带** `d-{identityStoreId}.` 前缀；CSV 中**通常**是裸 UUID，但实测有 3 个文件带前缀（§3.1.3）。
 
 ```
 日志: d-9067deb161.6478a4a8-60a1-70d9-37bc-6aae85f6746a
@@ -324,32 +386,42 @@ attempt_count   int           default 0
 ```
 PK: (connection_id, scope_id, user_id, date, client_type)
 
-user_id              varchar(64)     -- 裸 UUID
+user_id              varchar(64)              -- 裸 UUID，前缀已剥离（§3.1.3）
 date                 date
-client_type          varchar(20)     -- KIRO_IDE / KIRO_CLI / PLUGIN
-user_email           varchar(255)  index    -- 身份关联主键
-display_name         varchar(255)  nullable  -- 来自 Identity Store，仅展示
+client_type          varchar(20)              -- KIRO_IDE / KIRO_CLI / KIRO_WEB / PLUGIN
+identity_store_id    varchar(32)   nullable   -- 若原值带前缀则提取，否则 NULL
+user_email           varchar(255)  nullable index  -- 早期文件无此列（§3.1.1）
+display_name         varchar(255)  nullable   -- 来自 Identity Store，仅展示
 profile_id           varchar(512)             -- 完整 ARN
-subscription_tier    varchar(50)              -- POWER 等，全大写
-is_new_user          bool
+subscription_tier    varchar(50)              -- POWER / PRO_PLUS，UPPER_SNAKE
+is_new_user          bool          nullable   -- 早期文件无此列（§3.1.1）
 chat_conversations   int
 total_messages       int
 credits_used         float64
 overage_cap          float64
-overage_credits_used float64
+overage_credits_used float64                  -- 会非零，不可假设为 0
 overage_enabled      bool
 ```
+
+`user_email` 与 `is_new_user` **必须 nullable**：实测最早的表头变体不含这两列（§3.1.1）。回补历史月份时它们为空，身份关联对这部分数据不可用 —— 这是数据本身的限制，不是缺陷。
 
 ### 5.3 `_tool_kiro_user_model_messages`
 
 ```
 PK: (connection_id, scope_id, user_id, date, client_type, model_name)
 
-model_name     varchar(100)   -- 如 claude_opus_5
+model_name     varchar(100)   -- 下划线形式，如 claude_opus_4.6
 message_count  int
 ```
 
-解析规则与 `Total_Messages` 排除见 §3.1。
+解析规则与 `Total_Messages` 排除见 §3.1，实测取值域见 §3.1.2。
+
+**两点命名说明**：
+
+1. `model_name` 实际承载"模型或路由模式"。实测 8 个取值中，`auto` 与 `simple_task` 是路由模式而非模型。保留该列名，因为上游就是以同一套 `{X}_messages` 列形式给出的，强行区分会引入上游没有的语义。
+2. 值保留 CSV 的**下划线**原形（`claude_opus_4.6`），不转换。日志侧的 `chat_log.model_id` 是连字符形式（`claude-opus-4.6`），两者关联时在查询层归一化，不在写入层改写 —— 保持与上游一致才能追溯。
+
+**这张表是模型归因的权威来源**，`chat_log.model_id` 因仅 45% 覆盖率不可用于此目的（§3.2）。
 
 ### 5.4 `_tool_kiro_chat_log`
 
@@ -360,16 +432,17 @@ request_id         varchar(64)
 user_id            varchar(64)   index    -- 剥掉 d-xxx. 前缀的裸 UUID
 identity_store_id  varchar(32)            -- 从前缀提取，如 d-9067deb161
 timestamp          datetime(6)   index    -- 纳秒截断到微秒
-chat_trigger_type  varchar(20)            -- 实测均为 MANUAL
-model_id           varchar(100)           -- 实测均为 claude-opus-5
-has_prompt         bool          index    -- prompt 非空
-prompt_length      int
-prompt_sha256      char(64)      nullable index  -- prompt 为空时存 NULL
-response_length    int
-has_steering       bool          nullable -- 仅 has_prompt=true 时有意义
-is_spec_mode       bool          nullable -- 同上
-conversation_id    varchar(64)   nullable -- 实测 0/118 存在，建列备将来
-utterance_id       varchar(64)   nullable -- 同上
+chat_trigger_type    varchar(20)            -- 实测 4530/4530 为 MANUAL
+model_id             varchar(100) nullable  -- 仅 45% 存在（§3.2），不可用于模型归因
+has_prompt           bool         index     -- prompt 非空
+prompt_length        int
+prompt_sha256        char(64)     nullable index  -- prompt 为空时存 NULL
+response_length      int
+has_followup_prompts bool                   -- 实测 90% 存在
+has_steering         bool         nullable  -- 仅 has_prompt=true 时有意义
+is_spec_mode         bool         nullable  -- 同上
+conversation_id      varchar(64)  nullable  -- 实测 0/4530，建列备将来
+utterance_id         varchar(64)  nullable  -- 同上
 ```
 
 **不落库**：`prompt` 原文、`assistantResponse` 原文。派生字段在 extract 阶段用内存中的原文计算，算完丢弃。
@@ -403,7 +476,9 @@ right_context_length int
 
 **所有从 JSON 解析的字段使用指针类型**，以区分"字段缺失"与"字段为零值"。
 
-原因：AWS 的 S3 导出在字段为空时直接从 JSON 中省略该键（实测 6 个文档字段 0/118 出现）。若用值类型，缺失会静默变成 `0` / `""` 落库，下游无法区分"AI 返回了 0 行"与"这个字段根本不存在"。
+原因：AWS 的 S3 导出在字段为空时直接从 JSON 中省略该键。实测证据有两类：5 个文档字段在 4,530 条记录中 0 次出现；`modelId` 在 4,530 条中只出现 2,027 次（45%）。
+
+若用值类型，缺失会静默变成 `0` / `""` 落库，下游无法区分"AI 返回了 0 行"与"这个字段根本不存在" —— 而 `modelId` 这种 55% 缺失的字段，若落成空串，任何按模型分组的统计都会凭空多出一个占比过半的"空模型"分类。
 
 ---
 
@@ -468,18 +543,29 @@ GET + 解析 + 落库（单文件一个事务）
 
 ### 6.5 规模预估
 
-基于实测：单用户单日 **627 个文件 / 292 KB**，1.12 记录/文件。
+**单用户实测基线**（chat 日志，2026-01 ~ 07 全量）：
 
-按 100 人、人均 200 消息/天估算：
-
-| 指标 | 量级 |
+| 指标 | 实测 |
 |---|---|
-| 文件数 | 约 2 万/天，730 万/年 |
-| 数据量 | 数十 MB/天（可忽略）|
-| 串行 GET 耗时 | 约 13 分钟/天；回补一年约 80 小时 |
-| 20 并发回补一年 | 约 4 小时 |
+| 总量 | 18,412 个对象 / 12.8 MB |
+| 均值 | 695 字节/文件，1.005 条记录/文件 |
+| 日均 | 约 87 个文件/天（跨 212 天）|
+| 峰值日 | **627 个文件**（2026-07-27）—— 是日均的 7 倍 |
 
-结论：**存储与成本不是约束，对象数导致的墙钟时间是约束**，必须并发。
+**按 100 人线性外推**：
+
+| 指标 | 日均 | 峰值日 |
+|---|---|---|
+| 文件数 | 约 8,700/天 | 约 6.3 万/天 |
+| 年累计 | 约 320 万 | — |
+| 数据量 | 约 6 MB/天 | 约 44 MB/天 |
+| 串行 GET 耗时（40ms/次）| 约 6 分钟 | **约 42 分钟** |
+| 20 并发 | 约 18 秒 | 约 2 分钟 |
+| 回补一年（串行 / 20 并发）| 约 36 小时 / **约 1.8 小时** | — |
+
+结论：**存储与成本不是约束，对象数导致的墙钟时间是约束**。
+
+按日均看串行勉强可行，但**必须按峰值设计** —— 单日 42 分钟的串行采集会挤占调度窗口，且峰值与日均差 7 倍意味着重度使用者会周期性触发这种情况。20 并发把峰值压到 2 分钟，回补一年从一天半压到 2 小时。
 
 ### 6.6 边界情况
 
@@ -491,9 +577,15 @@ GET + 解析 + 落库（单文件一个事务）
 | 同一天多个 report CSV（CLI + IDE） | 均按 `file_type=report` 处理，靠 `client_type` 列区分，主键已含该列 |
 | `prompt` 为空 | `has_prompt=false`，`prompt_sha256` = NULL，`has_steering` / `is_spec_mode` = NULL |
 | `completions` 为空数组 | `completions_count=0`，行数字段为 0，**不跳过该记录** |
-| `userId` 带 `d-xxx.` 前缀 | 拆为 `identity_store_id` + `user_id`，落库前剥离 |
-| 两种日期格式 | `user_report` 为 ISO `2026-07-27`。按 `file_type` 分别指定格式，不用宽松解析器 |
-| `Subscription_Tier` 大小写 | 实测 `POWER`，文档写 `Power`。比较需大小写无关，并对未知值兜底 |
+| `userId` 带 `d-xxx.` 前缀 | 拆为 `identity_store_id` + `user_id`，落库前剥离。**日志恒带前缀，CSV 偶尔带**（§3.1.3）—— 两条路径都要剥 |
+| 日期格式 | `user_report` 为 ISO `2026-07-27`。按 `file_type` 指定格式，不用宽松解析器 |
+| `Subscription_Tier` 取值 | 实测 `POWER` / `PRO_PLUS`（UPPER_SNAKE），文档写 `Power` / `ProPlus`。比较需大小写与分隔符无关，并对未知值兜底 |
+| **表头未知列** | 19 种表头变体（§3.1.1）。未知列**忽略而非报错**；已知列缺失时落 NULL 而非零值 |
+| **列顺序变化** | 按列名映射，不做任何位置假设。`New_User` 实测出现在模型列之前和之后两种位置 |
+| **布尔值大小写** | `TRUE`（3 月）/ `true`（7 月），大小写无关解析 |
+| **`Client_Type` 未知值** | 实测四种：`KIRO_CLI` / `KIRO_IDE` / `KIRO_WEB` / `PLUGIN`。**不做枚举白名单**，未知值原样落库 —— `KIRO_WEB` 就是文档未提及而实际存在的例子 |
+| **模型名分隔符** | 日志用连字符、CSV 用下划线（§3.2）。若需关联，归一化后再比 |
+| `Overage_Credits_Used` 非零 | 实测有非零样本，不可假设为 0 |
 
 ---
 
@@ -521,9 +613,11 @@ FileName     string `gorm:"primaryKey;type:varchar(255)"`   // PK 第二列
 S3Path       string `gorm:"type:varchar(512)"`              // 无索引
 ```
 
-主键是 `(connection_id, file_name)`，查询按 `s3_path`，而该列无任何索引。在 730 万行规模下，每个文件的存在性检查都要扫该 connection 下的全部行 —— 2 万文件/天 × 700 万行扫描，任务无法完成。
+主键是 `(connection_id, file_name)`，查询按 `s3_path`，而该列无任何索引。查询只能用主键首列 `connection_id` 定位，然后逐行过滤 `s3_path` —— 单 connection 场景下即全表扫描。
 
-此类缺陷的形态值得记住：**模型的索引声明与查询条件不一致**。它在小数据量下完全不可见，到千万行才暴露，且表现为"任务跑不完"而非报错。
+按 §6.5 的百人规模（约 320 万行/年、峰值 6.3 万文件/天）：**峰值日需要 6.3 万次全表扫描，每次扫百万级行**。任务无法完成。
+
+此类缺陷的形态值得记住：**模型的索引声明与查询条件不一致**。它在小数据量下完全不可见（`q_dev` 的原始场景可能只有几千文件），到百万行才暴露，且表现为"任务跑不完"而非报错 —— 属于最难归因的一类。
 
 **实现要求**：主键 `(connection_id, s3_path)`，查询条件与主键逐列对齐。Code review 时对照模型的索引声明检查每一处 DAL 查询。
 
@@ -583,27 +677,41 @@ Fixture 需从附录 A 的 S3 路径重新提取，**且必须脱敏后才能入
 
 ---
 
-## 9. 待验证项与风险
+## 9. 验证结果与风险
 
-### 9.1 待验证
+### 9.1 已验证（2026-07-29 全量扫描）
+
+验证覆盖：107 个 user_report CSV（2026-02-10 ~ 07-27 全量）+ 4,530 条 chat 日志记录（01/04/06 三个月全量，占日志总量 25%）。
+
+| 项 | 结论 |
+|---|---|
+| `chatTriggerType` 是否出现 `INLINE_CHAT` | **否**。4530/4530 全为 `MANUAL`，跨 3 个月未出现。仍不做枚举白名单 |
+| 多模型场景 | **已验证**。单文件最多 3 个模型列；全量出现 8 个不同模型/模式 |
+| `PLUGIN` client type | **存在**，且额外发现 **`KIRO_WEB`**（文档未提及）|
+| `conversation_id` 是否会出现 | **否**。0/4530。确认无 session 分组能力 |
+| 多用户 | **已验证**。1 个文件含 2 行（2 个不同用户），共 2 个真实用户 |
+| `followupPrompts` | **存在，90% 覆盖**。原判断（0/118）基于单日样本，已修正 |
+| `modelId` 覆盖率 | **仅 45%**。原判断（100% 必填）已修正为 nullable |
+| `q:ListDashboardMetrics` | **标准 SDK 不可达**。botocore 中仅有 `qapps` / `qbusiness` / `qconnect` / `quicksight`，无 `q`。调用需裸 SigV4 打未公开端点 |
+
+### 9.2 仍待验证
 
 | 项 | 现状 | 验证方式 |
 |---|---|---|
-| `chatTriggerType` 是否出现 `INLINE_CHAT` | 实测 118/118 为 `MANUAL` | 采集更长时间窗后统计；解析不做枚举白名单，未知值原样落库 |
-| 多模型场景 | 实测仅 `claude_opus_5_messages` 一列 | 需一个使用多模型的账号样本，验证多动态列 |
-| `PLUGIN` client type | 实测仅 `KIRO_CLI` / `KIRO_IDE` | 同上 |
-| `conversation_id` 是否会出现 | 实测 0/118 | 建列备用，nullable |
-| `q:ListDashboardMetrics` 接口形状 | 未文档化 | v2 前实测 |
-| 多用户 / 多账号 | 实测样本仅 1 个用户、1 个账号 | 需真实团队环境样本，验证 CSV 多行解析与 scope 多账号 |
+| 多账号 scope | 实测仅 1 个 AWS 账号 | 需第二个账号的 bucket，验证 scope 的 `accountId` 维度 |
+| 团队规模下的表头一致性 | 实测 2 个用户，且同属一个 profile | 真实团队环境中，不同 profile / tier 的用户是否产生更多表头变体 |
+| 双 bucket 配置 | 实测环境为单 bucket | 需按官方建议配置两个 bucket 的环境验证回落逻辑 |
+| `GenerateCompletions` 是否会恢复 | 2026-03-19 后无数据 | 若团队启用 IDE inline 补全则会恢复；表结构已就绪 |
 
-### 9.2 风险
+### 9.3 风险
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| AWS 单方面变更 CSV 列或 JSON 字段 | 解析失败或静默丢字段 | 按列名映射（非位置）；未知列忽略而非报错；指针类型区分缺失；`error_message` 暴露解析失败 |
-| 上游 schema 与官方文档不一致 | 已发生（6 个文档字段实际不存在）| 以真实样本为唯一 schema 依据；建表前必须实测 |
+| **上游 schema 持续漂移** —— 已证实：5.5 个月内 19 种表头变体 | 新列被丢弃、已知列消失导致落 NULL | 按列名映射；未知列忽略而非报错；关键列全部 nullable；`error_message` 暴露解析异常。**这是常态而非例外，不可按"稳定 schema"设计** |
+| 官方文档与实际不一致 | 已发生两个方向：文档有而实际无（5 个 chat 字段）、实际有而文档无（`KIRO_WEB`）| 以真实样本为唯一 schema 依据；任何建列决策附实测出现率 |
+| 字段覆盖率不足被当成真实值 | `modelId` 仅 45%，若按 100% 假设做占比分析会系统性偏差 | 指针类型区分缺失与零值；文档中标注每个字段的实测覆盖率 |
 | 对象数增长超预估 | 采集墙钟时间变长 | `numOfWorkers` 可配；scope 按月切片可分批回补 |
-| 仅单用户样本 | 多用户场景未验证 | §9.1 列为待验证；上线首个真实团队后复核 |
+| 样本仅 2 用户 1 账号 | 多账号与团队规模场景未验证 | §9.2 列为待验证；上线首个真实团队后复核表头变体数 |
 | `fileName` 无路径 | 文件级归因不可靠 | 本文档不依赖该能力；后续归因工作需另寻路径来源 |
 
 ---
@@ -638,11 +746,13 @@ L3 需要 session → commit 的确定性绑定。已知 Kiro **没有 git lifec
 
 采集实测中发现两个别处得不到、且对提效判断有直接价值的派生指标：
 
-1. **自主率** = `has_prompt=false` 的记录数 / `has_prompt=true` 的记录数。实测 102:16 ≈ **6.4**，即用户每开口 1 次，agent 自主推进约 6.4 轮。它比 credits 更贴近"AI 替我做了多少事"。
+1. **自主率** = `has_prompt=false` 的记录数 / `has_prompt=true` 的记录数。
 
-   注意该比值来自**单个小时窗口**（2026-07-27 23 时，105 个文件 / 118 条记录）的单用户样本。若外推到当日全量（CLI 618 消息 / 309 credits），意味着仅约 1/7 的消息由用户发起，其余为 agent 循环 —— 但这是**外推而非实测**，需按 §9.1 用更长时间窗与多用户样本验证。
+   **实测（4,530 条 / 3 个月）：3209 空 : 1321 非空 = 2.43**。即用户每开口 1 次，agent 自主推进约 2.4 轮。
 
-   若该比值稳定，它修正了对"用量"的理解：所谓"用得多"主要是 agent 循环长，而非人问得多。这对区分"AI 干得多"与"人用得勤"有直接价值。
+   > 单日样本（118 条）曾得出 6.4，宽样本修正为 2.43。**说明该比值波动较大，需按周聚合而非按日**，单日值不可用于个体比较。
+
+   它比 credits 更贴近"AI 替我做了多少事"，且修正了对"用量"的理解：约 71% 的消息是 agent 循环产生的，不是人问出来的。这对区分"AI 干得多"与"人用得勤"有直接价值 —— 而这个区分正是判断提效的核心。
 
 2. **per-model 成本构成**（`user_model_messages`）。不同模型的 credit 成本差异显著，该表可回答"credits 花在哪个模型上"，进而支撑一个可直接行动的决策：用 Auto 路由 vs 手动指定贵模型的成本差异。
 
@@ -650,10 +760,22 @@ L3 需要 session → commit 的确定性绑定。已知 Kiro **没有 git lifec
 
 ## 附录 A：样本清单
 
-| 文件 | 来源 | 用途 |
+采样环境：AWS 账号 `034362076319`，bucket `s3://ychchen-q-dev/`。
+
+| 样本集 | 规模 | 用途 |
 |---|---|---|
-| `KIRO_CLI_034362076319_user_report_202607270000.csv` | `s3://ychchen-q-dev/user-report/AWSLogs/034362076319/KiroLogs/user_report/us-east-1/2026/07/27/00/` | report schema、CLI 数据 |
-| `KIRO_IDE_034362076319_user_report_202607270000.csv` | 同上 | 验证 IDE 表头一致、同用户双 client type |
-| `GenerateAssistantResponse/us-east-1/2026/07/27/23/*.json.gz`（105 个）| `s3://ychchen-q-dev/logging/AWSLogs/034362076319/KiroLogs/` | chat log 字段并集、prompt 空值分布 |
-| `GenerateCompletions/us-east-1/2026/03/19/**/*.json.gz`（11 个）| 同上 | completion log schema、completions 分布 |
-| `034362076319_by_user_analytic_202607270000_report.csv` | `s3://ychchen-q-dev/user-report/.../by_user_analytic/` | 论证 §2.2 不采集的依据 |
+| `user_report/**/*.csv` **全量** | 107 个文件，2026-02-10 ~ 07-27 | §3.1.1 表头漂移（19 种变体）、§3.1.2 取值域（4 种 client type / 2 种 tier / 8 种模型）、§3.1.3 格式漂移、多用户与多行解析 |
+| `GenerateAssistantResponse/us-east-1/2026/{01,04,06}/**` | 4,506 文件 / 4,530 条记录（占日志总量 25%）| §3.2 字段出现率、`followupPrompts` 与 `modelId` 覆盖率修正、`chatTriggerType` 枚举、prompt 空值率、自主率 2.43 |
+| `GenerateAssistantResponse/us-east-1/2026/07/27/23/**` | 105 文件 / 118 条记录 | 单日细节核对、记录数分布、非空 prompt 长度 |
+| `GenerateCompletions/us-east-1/2026/03/19/**` | 11 条记录 | §3.3 completion log schema、`completions` 数组分布、`fileName` 无路径 |
+| `by_user_analytic/**` | 1 个文件 | §2.2 不采集的论证依据（44 指标列中 42 列为 0）|
+
+**关键路径模板**（实测确认）：
+
+```
+s3://ychchen-q-dev/user-report/AWSLogs/034362076319/KiroLogs/user_report/us-east-1/{y}/{m}/{d}/00/{clientType}_{acct}_user_report_{ts}.csv
+s3://ychchen-q-dev/logging/AWSLogs/034362076319/KiroLogs/GenerateAssistantResponse/us-east-1/{y}/{m}/{d}/{h}/{acct}_GenerateAssistantResponse_{ts}_{rand}.json.gz
+s3://ychchen-q-dev/logging/AWSLogs/034362076319/KiroLogs/GenerateCompletions/us-east-1/{y}/{m}/{d}/{h}/{acct}_GenerateCompletions_{ts}_{rand}.json.gz
+```
+
+注意报表路径的小时段固定为 `00`（对应 2:00 UTC 生成时间），日志路径的小时段是真实小时。
