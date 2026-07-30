@@ -7,20 +7,28 @@
 #   ./install.sh --check         report status without changing anything
 #   ./install.sh --uninstall     remove what this script installed
 #
-# The hook always goes into .git/hooks/, and core.hooksPath is never touched.
-# That needs saying because it looks wrong at first: on an Amazon laptop
-# git-defender sets core.hooksPath at system scope, which by git's own rules
-# means .git/hooks is ignored. It turns out git-defender invokes the local
-# .git/hooks/prepare-commit-msg itself - verified by observation, and its error
-# text ("Your local prepare-commit-msg hook failed") says as much.
+# Where the hook goes depends on core.hooksPath, which git consults in place of
+# .git/hooks whenever it is set. Two tools set it in practice and they behave
+# differently, so the destination is decided by testing rather than by name:
 #
-# Redirecting core.hooksPath to work around it would be worse than unnecessary:
-# git-defender reports the event ("User had a non Code Defender hooks path value
-# set"), so the workaround trips a security signal while solving nothing.
+#   husky (repository scope, e.g. config-ui/.husky) does NOT forward to
+#   .git/hooks - its shim only re-executes itself. Verified by installing into
+#   .git/hooks in such a repo and watching the trailer never appear. So the hook
+#   must go into the husky directory itself.
 #
-# husky is the other common case. It also sets core.hooksPath, and its own hooks
-# live in that directory - but husky's shims call .git/hooks too, so the same
-# placement works.
+#   git-defender (system scope, a root-owned directory) DOES invoke
+#   .git/hooks/prepare-commit-msg - its own error text says "Your local
+#   prepare-commit-msg hook failed". Its directory is not writable anyway, so
+#   .git/hooks is both the only option and the correct one.
+#
+# The rule that covers both: install into the directory git reads, unless that
+# directory is unwritable, in which case fall back to .git/hooks - which is
+# exactly the case where the tooling forwards there.
+#
+# core.hooksPath itself is never modified. Redirecting it would be worse than
+# useless under git-defender, which reports the event ("User had a non Code
+# Defender hooks path value set"), tripping a security signal while solving
+# nothing.
 set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -48,22 +56,42 @@ GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null) || {
   echo "not a git repository: $TARGET_REPO" >&2; exit 1
 }
 REPO_ROOT=$(git rev-parse --show-toplevel)
-HOOK_DIR="$GIT_DIR/hooks"
-HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
 SESSION_FILE="$GIT_DIR/kiro-sessions"
+
+# resolve_hook_dir prints the directory to install into, plus a short reason.
+resolve_hook_dir() {
+  _hp=$(git config --get core.hooksPath 2>/dev/null || true)
+  if [ -z "$_hp" ]; then
+    echo "$GIT_DIR/hooks|git default"
+    return
+  fi
+  case "$_hp" in
+    /*) _abs=$_hp ;;
+    *)  _abs="$REPO_ROOT/$_hp" ;;
+  esac
+  # Writability is the deciding test. An unwritable hooksPath belongs to managed
+  # tooling, and that tooling is the kind that forwards to .git/hooks.
+  if [ -d "$_abs" ] && [ -w "$_abs" ]; then
+    echo "$_abs|core.hooksPath ($_hp)"
+  elif [ ! -d "$_abs" ]; then
+    echo "$_abs|core.hooksPath ($_hp), creating it"
+  else
+    echo "$GIT_DIR/hooks|core.hooksPath ($_hp) is not writable, falling back"
+  fi
+}
+
+RESOLVED_DIR=$(resolve_hook_dir)
+HOOK_DIR=${RESOLVED_DIR%|*}
+HOOK_WHY=${RESOLVED_DIR#*|}
+HOOK_FILE="$HOOK_DIR/prepare-commit-msg"
 
 # ---------------------------------------------------------------- check --------
 
 if [ "$MODE" = check ]; then
   echo "repository:  $REPO_ROOT"
 
-  HP=$(git config --get core.hooksPath 2>/dev/null || true)
-  if [ -n "$HP" ]; then
-    echo "hooksPath:   $HP"
-    echo "             (set by other tooling; .git/hooks is still used, see header)"
-  else
-    echo "hooksPath:   unset"
-  fi
+  echo "hook dir:    $HOOK_DIR"
+  echo "             chosen by: $HOOK_WHY"
 
   if [ -f "$HOOK_FILE" ] && grep -q "$MARKER" "$HOOK_FILE" 2>/dev/null; then
     if [ -x "$HOOK_FILE" ]; then
@@ -114,6 +142,14 @@ if [ "$MODE" = uninstall ]; then
   else
     echo "no hook installed by this script"
   fi
+  # Also clear a stale copy in .git/hooks. A repo can acquire core.hooksPath
+  # after the hook was installed (adding husky does exactly that), leaving an
+  # orphan behind that --check would no longer look at.
+  STALE="$GIT_DIR/hooks/prepare-commit-msg"
+  if [ "$STALE" != "$HOOK_FILE" ] && [ -f "$STALE" ] && grep -q "$MARKER" "$STALE" 2>/dev/null; then
+    rm -f "$STALE"
+    echo "removed a stale copy at $STALE"
+  fi
   rm -f "$REPO_ROOT/.kiro/hooks/kiro-session-record.kiro.hook" 2>/dev/null || true
   echo "note: $SESSION_FILE is left in place; delete it manually if unwanted"
   exit 0
@@ -150,6 +186,7 @@ fi
 
 chmod +x "$HOOK_FILE"
 echo "installed $HOOK_FILE"
+echo "  location chosen by: $HOOK_WHY"
 [ -n "$CHAIN_TO" ] && echo "  chaining to $CHAIN_TO"
 
 # Register the Kiro-side recorder for this workspace.
