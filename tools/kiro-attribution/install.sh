@@ -105,7 +105,7 @@ if [ "$MODE" = check ]; then
     echo "commit hook: not installed"
   fi
 
-  KIRO_HOOK="$REPO_ROOT/.kiro/hooks/kiro-session-record.kiro.hook"
+  KIRO_HOOK="$REPO_ROOT/.kiro/hooks/kiro-attribution.json"
   if [ -f "$KIRO_HOOK" ]; then
     echo "kiro hook:   registered"
   else
@@ -150,7 +150,7 @@ if [ "$MODE" = uninstall ]; then
     rm -f "$STALE"
     echo "removed a stale copy at $STALE"
   fi
-  rm -f "$REPO_ROOT/.kiro/hooks/kiro-session-record.kiro.hook" 2>/dev/null || true
+  rm -f "$REPO_ROOT/.kiro/hooks/kiro-attribution.json" 2>/dev/null || true
   echo "note: $SESSION_FILE is left in place; delete it manually if unwanted"
   exit 0
 fi
@@ -190,25 +190,49 @@ echo "  location chosen by: $HOOK_WHY"
 [ -n "$CHAIN_TO" ] && echo "  chaining to $CHAIN_TO"
 
 # Register the Kiro-side recorder for this workspace.
+#
+# The schema matters: Kiro loads only .kiro/hooks/*.json files shaped as
+# {"version":"v1","hooks":[...]}. The older one-object-per-file format with a
+# .kiro.hook extension is silently ignored - the log says "loaded 0 standalone
+# hooks" and nothing else indicates why. Field names changed too: "when.type":
+# "agentStop" became "trigger": "Stop", and "then" became "action".
+#
+# Hooks load at session start, so a running Kiro session must be restarted before
+# a newly installed hook fires.
 if [ -d "$REPO_ROOT/.kiro" ]; then
   mkdir -p "$REPO_ROOT/.kiro/hooks"
-  cat > "$REPO_ROOT/.kiro/hooks/kiro-session-record.kiro.hook" <<EOF
+  # Invoked via bash, and with a repo-relative path.
+  #
+  # The bash prefix is required by Kiro's permission model: shell capability
+  # rules match on command prefix, and a bare script path matches nothing, so the
+  # hook is skipped with no error logged. "bash *" is a standard allowed pattern.
+  #
+  # Relative rather than absolute so the hook survives the repo being moved or
+  # re-cloned; Kiro runs hooks with the workspace root as cwd.
+  REL_RECORDER=$(printf '%s' "$SCRIPT_DIR/kiro-session-record.sh" | sed "s|^$REPO_ROOT/||")
+  cat > "$REPO_ROOT/.kiro/hooks/kiro-attribution.json" <<EOF
 {
-  "version": "1.0.0",
-  "enabled": true,
-  "name": "kiro-session-record",
-  "description": "Records the Kiro session id for commit attribution. Installed by tools/kiro-attribution/install.sh.",
-  "when": { "type": "agentStop" },
-  "then": {
-    "type": "runCommand",
-    "command": "$SCRIPT_DIR/kiro-session-record.sh"
-  }
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "kiro-session-record",
+      "description": "Records the Kiro session id so the next commit carries a Kiro-Session-Id trailer. Installed by tools/kiro-attribution/install.sh.",
+      "trigger": "Stop",
+      "action": {
+        "type": "command",
+        "command": "bash $REL_RECORDER"
+      },
+      "timeout": 15,
+      "enabled": true
+    }
+  ]
 }
 EOF
-  echo "registered the Kiro stop hook in $REPO_ROOT/.kiro/hooks"
+  echo "registered the Kiro Stop hook in $REPO_ROOT/.kiro/hooks/kiro-attribution.json"
+  echo "  RESTART Kiro for it to take effect - hooks load at session start"
 else
   echo "no .kiro/ directory here, so the Kiro-side hook was not registered."
-  echo "  Add one with when.type = agentStop running:"
+  echo "  Create .kiro/hooks/kiro-attribution.json with trigger \"Stop\" running:"
   echo "    $SCRIPT_DIR/kiro-session-record.sh"
 fi
 
