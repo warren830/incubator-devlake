@@ -24,8 +24,10 @@ const UI = 'http://localhost:4000';
 const GRAFANA = 'http://localhost:3002';
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 
-// Use existing connection with valid credentials
-const EXISTING_CONNECTION_ID = 5;
+// The full-flow test needs an existing Kiro connection with valid credentials.
+// Keep environment-specific ids out of the repository.
+const EXISTING_CONNECTION_ID = Number(process.env.KIRO_CONNECTION_ID || 0);
+const KIRO_ACCOUNT_ID = process.env.KIRO_ACCOUNT_ID || '';
 
 const state: {
   connectionId: number;
@@ -87,19 +89,21 @@ async function openGrafanaDashboard(page: Page, uid: string, screenshotPath: str
   await page.screenshot({ path: screenshotPath, fullPage: true });
 }
 
-test.describe.serial('Q-Dev Plugin Full Flow', () => {
+test.describe.serial('Kiro Plugin Full Flow', () => {
 
   test('Step 1: Verify Existing Connection via API', async () => {
+    expect(EXISTING_CONNECTION_ID, 'set KIRO_CONNECTION_ID').toBeGreaterThan(0);
+    expect(KIRO_ACCOUNT_ID, 'set KIRO_ACCOUNT_ID').not.toBe('');
     const api = await request.newContext({ baseURL: API });
 
-    const resp = await api.get(`/plugins/q_dev/connections/${state.connectionId}`);
+    const resp = await api.get(`/plugins/kiro/connections/${state.connectionId}`);
     expect(resp.ok()).toBeTruthy();
     const conn = await resp.json();
     console.log(`Using connection: id=${conn.id}, name=${conn.name}, bucket=${conn.bucket}`);
 
-    const testResp = await api.post(`/plugins/q_dev/connections/${state.connectionId}/test`);
+    const testResp = await api.post(`/plugins/kiro/connections/${state.connectionId}/test`);
     const testBody = await testResp.json();
-    console.log('Test connection:', testBody.success ? 'OK' : testBody.message);
+    console.log('Test connection:', { accounts: testBody.accounts, streams: testBody.streams, hint: testBody.hint });
     expect(testResp.ok()).toBeTruthy();
   });
 
@@ -114,11 +118,11 @@ test.describe.serial('Q-Dev Plugin Full Flow', () => {
   test('Step 3: Create Scope (S3 Slice) via API', async () => {
     const api = await request.newContext({ baseURL: API });
 
-    const resp = await api.put(`/plugins/q_dev/connections/${state.connectionId}/scopes`, {
+    const resp = await api.put(`/plugins/kiro/connections/${state.connectionId}/scopes`, {
       data: {
         data: [
           {
-            accountId: '034362076319',
+            accountId: KIRO_ACCOUNT_ID,
             basePath: '',
             year: 2026,
             month: 3,
@@ -147,7 +151,7 @@ test.describe.serial('Q-Dev Plugin Full Flow', () => {
         isManual: true,
         connections: [
           {
-            pluginName: 'q_dev',
+            pluginName: 'kiro',
             connectionId: state.connectionId,
             scopes: [{ scopeId: state.scopeId }],
           },
@@ -210,22 +214,22 @@ test.describe.serial('Q-Dev Plugin Full Flow', () => {
   });
 
   test('Step 8: Grafana - Kiro Usage Dashboard (new format)', async ({ page }) => {
-    await openGrafanaDashboard(page, 'qdev_user_report', path.join(SCREENSHOT_DIR, '02-dashboard-user-report.png'));
+    await openGrafanaDashboard(page, 'kiro_user_report', path.join(SCREENSHOT_DIR, '02-dashboard-user-report.png'));
     console.log('Screenshot: Kiro Usage Dashboard');
   });
 
-  test('Step 9: Grafana - Kiro Legacy Feature Metrics', async ({ page }) => {
-    await openGrafanaDashboard(page, 'qdev_feature_metrics', path.join(SCREENSHOT_DIR, '03-dashboard-feature-metrics.png'));
-    console.log('Screenshot: Kiro Legacy Feature Metrics');
+  test('Step 9: Grafana - Kiro Feature Metrics', async ({ page }) => {
+    await openGrafanaDashboard(page, 'kiro_feature_metrics', path.join(SCREENSHOT_DIR, '03-dashboard-feature-metrics.png'));
+    console.log('Screenshot: Kiro Feature Metrics');
   });
 
   test('Step 10: Grafana - Kiro AI Activity Insights (logging)', async ({ page }) => {
-    await openGrafanaDashboard(page, 'qdev_logging', path.join(SCREENSHOT_DIR, '04-dashboard-logging.png'));
+    await openGrafanaDashboard(page, 'kiro_logging', path.join(SCREENSHOT_DIR, '04-dashboard-logging.png'));
     console.log('Screenshot: Kiro AI Activity Insights');
   });
 
   test('Step 11: Grafana - Kiro Executive Dashboard', async ({ page }) => {
-    await openGrafanaDashboard(page, 'qdev_executive', path.join(SCREENSHOT_DIR, '05-dashboard-executive.png'));
+    await openGrafanaDashboard(page, 'kiro_executive', path.join(SCREENSHOT_DIR, '05-dashboard-executive.png'));
     console.log('Screenshot: Kiro Executive Dashboard');
   });
 
