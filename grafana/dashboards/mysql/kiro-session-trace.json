@@ -1,0 +1,644 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (disabled by default \u2014 enable it in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.",
+        "mode": "markdown"
+      },
+      "transparent": true
+    },
+    {
+      "type": "row",
+      "title": "Overview (as-is association)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 100,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Session-linked commits",
+      "description": "Distinct commits carrying a session trailer, authored in range",
+      "id": 101,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "No data yet"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT sc.commit_sha) AS value FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Sessions reaching a commit",
+      "description": "Distinct session ids named by any commit in range",
+      "id": 102,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "No data yet"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT sc.session_id) AS value FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Merged PRs touched",
+      "description": "Merged PRs containing at least one session-linked commit",
+      "id": 103,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "No data yet"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT pr.id) AS value FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Issues reached",
+      "description": "Issues linked (via pull_request_issues) to a session-touched merged PR",
+      "id": 104,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "match": "null",
+                "result": {
+                  "text": "No data yet"
+                }
+              },
+              "type": "special"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT pri.issue_id) AS value FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN pull_request_issues pri ON pri.pull_request_id = pr.id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Weekly coverage",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 110,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Commits: all vs session-linked (weekly)",
+      "description": "Gap between the bars = commits without a trailer (human-only work, or hooks not installed)",
+      "id": 112,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS time, COUNT(DISTINCT c.sha) AS all_commits, COUNT(DISTINCT sc.commit_sha) AS session_linked FROM commits c JOIN repo_commits rc ON rc.commit_sha = c.sha LEFT JOIN _tool_kiro_session_commits sc ON sc.commit_sha = c.sha WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Merged PRs: all vs session-linked (weekly)",
+      "description": "A PR counts as session-linked when any of its commits carries a trailer",
+      "id": 113,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS time, COUNT(DISTINCT pr.id) AS merged_prs, COUNT(DISTINCT CASE WHEN sc.session_id IS NOT NULL THEN pr.id END) AS session_linked_prs FROM pull_requests pr JOIN pull_request_commits prc ON prc.pull_request_id = pr.id JOIN repo_commits rc ON rc.commit_sha = prc.commit_sha LEFT JOIN _tool_kiro_session_commits sc ON sc.commit_sha = prc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Trace",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 120,
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Session \u2192 Commit \u2192 PR \u2192 Issue (latest 200)",
+      "description": "Empty PR/Issue cells mean that hop has no edge yet: PR not merged/collected, or no issue key referenced",
+      "id": 121,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT sc.session_id AS `Session`, sc.trailer_key AS `Agent`, SUBSTRING(sc.commit_sha, 1, 8) AS `Commit`, c.authored_date AS `Authored`, pr.pull_request_key AS `PR #`, pr.title AS `PR Title`, pr.merged_date AS `Merged`, pri.issue_key AS `Issue`, i.title AS `Issue Title`, i.type AS `Issue Type` FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha LEFT JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha LEFT JOIN pull_requests pr ON pr.id = prc.pull_request_id LEFT JOIN pull_request_issues pri ON pri.pull_request_id = pr.id LEFT JOIN issues i ON i.id = pri.issue_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) ORDER BY c.authored_date DESC LIMIT 200",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Issues by AI involvement (dose, as-is)",
+      "description": "Sessions/commits/PRs per issue. Dose comparison is only meaningful within similar task types.",
+      "id": 122,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 33
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT pri.issue_key AS `Issue`, MAX(i.title) AS `Title`, MAX(i.type) AS `Type`, COUNT(DISTINCT sc.session_id) AS `Sessions`, COUNT(DISTINCT sc.commit_sha) AS `Commits`, COUNT(DISTINCT pr.id) AS `PRs` FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN pull_request_issues pri ON pri.pull_request_id = pr.id JOIN issues i ON i.id = pri.issue_id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY pri.issue_key ORDER BY COUNT(DISTINCT sc.session_id) DESC LIMIT 100",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 41,
+  "tags": [
+    "kiro",
+    "devdelta",
+    "trace"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "devlake-mysql-api"
+        },
+        "definition": "SELECT DISTINCT name FROM projects",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": "SELECT DISTINCT name FROM projects",
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Kiro Session \u2192 Delivery Trace",
+  "uid": "kiro_session_trace",
+  "version": 1
+}
