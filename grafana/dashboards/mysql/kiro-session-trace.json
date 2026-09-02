@@ -25,7 +25,7 @@
       "type": "text",
       "title": "",
       "gridPos": {
-        "h": 6,
+        "h": 8,
         "w": 24,
         "x": 0,
         "y": 0
@@ -36,7 +36,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- **Per person** row: one series per *person* in every band, on one shared time axis, so a week can be read top-to-bottom: credits spent \u2192 AI-linked commits \u2192 PRs merged \u2192 issues resolved. People come from DevLake's **curated identity mapping** (`users` / `user_accounts`, i.e. the org plugin's users.csv and user_accounts.csv) \u2014 never from a heuristic. Pick people in the **Person** selector; each band is grouped bars on the same zero-filled week axis, so a person keeps one slot and one colour in every band. Accounts nobody has mapped do not appear there.\n- The collapsed **By raw identity** row keeps the four unmapped namespaces \u2014 Kiro users, PR authors (forge logins), issue assignees, git author emails \u2014 side by side and deliberately NOT merged: the only merge on this dashboard is the curated mapping above.",
+        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- **Per person** row: one series per *person* in every band, on one shared time axis, so a week can be read top-to-bottom: credits spent \u2192 AI-linked commits \u2192 PRs merged \u2192 issues resolved. People come from DevLake's **curated identity mapping** (`users` / `user_accounts`, i.e. the org plugin's users.csv and user_accounts.csv) \u2014 never from a heuristic. Pick people in the **Person** selector; each band is grouped bars on the same zero-filled week axis, so a person keeps one slot and one colour in every band. Accounts nobody has mapped do not appear there.\n- **Scale**: the view is organised org \u2192 team \u2192 person. **By team** bands are the org-level read (a team is one bar, however many people it has). **Per person** bands are meant for a team-sized selection (\u2264 8 people): pick a team first, then people. For many people use the **person \u00d7 week matrix** (one row per person, colour = the metric chosen in the Metric selector; switching the metric keeps the row order). There is deliberately no ranking view.\n- The collapsed **By raw identity** row keeps the four unmapped namespaces \u2014 Kiro users, PR authors (forge logins), issue assignees, git author emails \u2014 side by side and deliberately NOT merged: the only merge on this dashboard is the curated mapping above.",
         "mode": "markdown"
       },
       "transparent": true
@@ -49,7 +49,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 8
       },
       "id": 100,
       "panels": []
@@ -67,7 +67,7 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 7
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -138,7 +138,7 @@
         "h": 5,
         "w": 6,
         "x": 6,
-        "y": 7
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -209,7 +209,7 @@
         "h": 5,
         "w": 6,
         "x": 12,
-        "y": 7
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -280,7 +280,7 @@
         "h": 5,
         "w": 6,
         "x": 18,
-        "y": 7
+        "y": 9
       },
       "fieldConfig": {
         "defaults": {
@@ -340,31 +340,31 @@
     },
     {
       "type": "row",
-      "title": "Per person: credits \u2192 AI-linked commits \u2192 merged PRs \u2192 resolved issues (curated identity mapping; pick people above)",
+      "title": "By team: credits \u2192 AI-linked commits \u2192 merged PRs \u2192 resolved issues (org level; a team is one bar)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 14
       },
-      "id": 140,
+      "id": 160,
       "panels": []
     },
     {
       "type": "table",
-      "title": "Per person totals (selected range)",
-      "description": "Totals for the selected people over the dashboard time range: credits (Kiro report), session-linked commits, merged PRs, resolved issues. Descriptive, as-is; no ratios on purpose.",
-      "id": 145,
+      "title": "Team totals (selected range)",
+      "description": "Totals per team over the dashboard range. People = mapped members (team_users).",
+      "id": 165,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 7,
+        "h": 5,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 15
       },
       "fieldConfig": {
         "defaults": {
@@ -401,22 +401,22 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT u.name AS `Person`, (SELECT ROUND(COALESCE(SUM(r.credits_used), 0)) FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email WHERE ua.user_id = u.id AND $__timeFilter(r.date)) AS `Credits`, (SELECT COUNT(DISTINCT sc.commit_sha) FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id WHERE ua.user_id = u.id AND $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `AI-linked commits`, (SELECT COUNT(DISTINCT pr.id) FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id WHERE ua.user_id = u.id AND pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `Merged PRs`, (SELECT COUNT(DISTINCT i.id) FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id WHERE ua.user_id = u.id AND i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date)) AS `Issues resolved` FROM users u WHERE u.name IN ($person) ORDER BY u.name",
+          "rawSql": "SELECT t.name AS `Team`, (SELECT COUNT(*) FROM team_users tu2 WHERE tu2.team_id = t.id) AS `People`, (SELECT ROUND(COALESCE(SUM(r.credits_used), 0)) FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email WHERE ua.user_id IN (SELECT tu.user_id FROM team_users tu WHERE tu.team_id = t.id) AND $__timeFilter(r.date)) AS `Credits`, (SELECT COUNT(DISTINCT sc.commit_sha) FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id WHERE ua.user_id IN (SELECT tu.user_id FROM team_users tu WHERE tu.team_id = t.id) AND $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `AI-linked commits`, (SELECT COUNT(DISTINCT pr.id) FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id WHERE ua.user_id IN (SELECT tu.user_id FROM team_users tu WHERE tu.team_id = t.id) AND pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `Merged PRs`, (SELECT COUNT(DISTINCT i.id) FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id WHERE ua.user_id IN (SELECT tu.user_id FROM team_users tu WHERE tu.team_id = t.id) AND i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date)) AS `Issues resolved` FROM teams t WHERE t.name IN ($team) ORDER BY t.name",
           "refId": "A"
         }
       ]
     },
     {
       "type": "barchart",
-      "title": "Credits per week",
-      "description": "Kiro credits (official usage report) per person per week. Identity: user_email \u2192 user_accounts \u2192 users. Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
-      "id": 141,
+      "title": "Credits per week by team",
+      "description": "Kiro credits (official usage report) per person per week. One bar per team per week (members via team_users). Same slot and colour for a team in every band.",
+      "id": 161,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 7,
+        "h": 6,
         "w": 24,
         "x": 0,
         "y": 20
@@ -470,7 +470,493 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS credits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS w, u.id AS uid, SUM(r.credits_used) AS v FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(r.date) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), tm AS (SELECT t.id, t.name FROM teams t WHERE t.name IN ($team)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, tm.name AS team, COALESCE(m.v, 0) AS credits FROM wk CROSS JOIN tm LEFT JOIN (SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS w, t.id AS gid, SUM(r.credits_used) AS v FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(r.date) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = tm.id ORDER BY wk.w, tm.name",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "team",
+            "rowField": "week",
+            "valueField": "credits",
+            "emptyValue": "zero"
+          }
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Session-linked commits per week by team",
+      "description": "Commits carrying a session trailer, per person per week. One bar per team per week (members via team_users). Same slot and colour for a team in every band.",
+      "id": 162,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), tm AS (SELECT t.id, t.name FROM teams t WHERE t.name IN ($team)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, tm.name AS team, COALESCE(m.v, 0) AS session_linked_commits FROM wk CROSS JOIN tm LEFT JOIN (SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS w, t.id AS gid, COUNT(DISTINCT sc.commit_sha) AS v FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = tm.id ORDER BY wk.w, tm.name",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "team",
+            "rowField": "week",
+            "valueField": "session_linked_commits",
+            "emptyValue": "zero"
+          }
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Merged PRs per week by team",
+      "description": "Merged pull requests per person per week. One bar per team per week (members via team_users). Same slot and colour for a team in every band.",
+      "id": 163,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), tm AS (SELECT t.id, t.name FROM teams t WHERE t.name IN ($team)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, tm.name AS team, COALESCE(m.v, 0) AS merged_prs FROM wk CROSS JOIN tm LEFT JOIN (SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS w, t.id AS gid, COUNT(DISTINCT pr.id) AS v FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = tm.id ORDER BY wk.w, tm.name",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "team",
+            "rowField": "week",
+            "valueField": "merged_prs",
+            "emptyValue": "zero"
+          }
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Issues resolved per week by team",
+      "description": "Issues with a resolution date per person per week (assignee). One bar per team per week (members via team_users). Same slot and colour for a team in every band.",
+      "id": 164,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), tm AS (SELECT t.id, t.name FROM teams t WHERE t.name IN ($team)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, tm.name AS team, COALESCE(m.v, 0) AS resolved_issues FROM wk CROSS JOIN tm LEFT JOIN (SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS w, t.id AS gid, COUNT(DISTINCT i.id) AS v FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = tm.id ORDER BY wk.w, tm.name",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "team",
+            "rowField": "week",
+            "valueField": "resolved_issues",
+            "emptyValue": "zero"
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Per person: credits \u2192 AI-linked commits \u2192 merged PRs \u2192 resolved issues (pick a team, then \u2264 8 people for the bars)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 140,
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Per person totals (selected range)",
+      "description": "Totals for the selected people over the dashboard time range: credits (Kiro report), session-linked commits, merged PRs, resolved issues. Descriptive, as-is; no ratios on purpose.",
+      "id": 145,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT u.name AS `Person`, t.name AS `Team`, (SELECT ROUND(COALESCE(SUM(r.credits_used), 0)) FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email WHERE ua.user_id = u.id AND $__timeFilter(r.date)) AS `Credits`, (SELECT COUNT(DISTINCT sc.commit_sha) FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id WHERE ua.user_id = u.id AND $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `AI-linked commits`, (SELECT COUNT(DISTINCT pr.id) FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id WHERE ua.user_id = u.id AND pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `Merged PRs`, (SELECT COUNT(DISTINCT i.id) FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id WHERE ua.user_id = u.id AND i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date)) AS `Issues resolved` FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person) ORDER BY t.name, u.name",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Person \u00d7 week matrix \u2014 $metric (scales to many people; rows keep their order when the metric changes)",
+      "description": "One row per selected person (grouped by team, then name), one column per week, cell colour = the metric chosen in the Metric selector. Zero-filled, so every person has every week. Colour is scaled within each week column (who was high that week); read the numbers to follow one person across weeks. Use this instead of the bars when more than ~8 people are selected.",
+      "id": 146,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "color-background",
+              "mode": "gradient",
+              "applyToRow": false
+            }
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "person\\week"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto"
+                }
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              },
+              {
+                "id": "displayName",
+                "value": "Person"
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT u.id, u.name, t.name AS team FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, CASE '$metric' WHEN 'credits' THEN COALESCE(m0.v, 0) WHEN 'session_linked_commits' THEN COALESCE(m1.v, 0) WHEN 'merged_prs' THEN COALESCE(m2.v, 0) ELSE COALESCE(m3.v, 0) END AS value FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS w, u.id AS gid, SUM(r.credits_used) AS v FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(r.date) GROUP BY 1, 2) m0 ON m0.w = wk.w AND m0.gid = ppl.id LEFT JOIN (SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT sc.commit_sha) AS v FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m1 ON m1.w = wk.w AND m1.gid = ppl.id LEFT JOIN (SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT pr.id) AS v FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m2 ON m2.w = wk.w AND m2.gid = ppl.id LEFT JOIN (SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT i.id) AS v FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2) m3 ON m3.w = wk.w AND m3.gid = ppl.id ORDER BY ppl.team, ppl.name, wk.w",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "week",
+            "rowField": "person",
+            "valueField": "value",
+            "emptyValue": "zero"
+          }
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Credits per week",
+      "description": "Kiro credits (official usage report) per person per week. Identity: user_email \u2192 user_accounts \u2192 users. Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
+      "id": 141,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "auto",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT u.id, u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS credits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS w, u.id AS gid, SUM(r.credits_used) AS v FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(r.date) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
         }
       ],
@@ -499,7 +985,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 27
+        "y": 70
       },
       "fieldConfig": {
         "defaults": {
@@ -550,7 +1036,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS session_linked_commits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT sc.commit_sha) AS v FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT u.id, u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS session_linked_commits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT sc.commit_sha) AS v FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
         }
       ],
@@ -579,7 +1065,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 77
       },
       "fieldConfig": {
         "defaults": {
@@ -630,7 +1116,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS merged_prs FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT pr.id) AS v FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT u.id, u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS merged_prs FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT pr.id) AS v FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
         }
       ],
@@ -659,7 +1145,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 84
       },
       "fieldConfig": {
         "defaults": {
@@ -710,7 +1196,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS resolved_issues FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT i.id) AS v FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT u.id, u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) AND u.name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS resolved_issues FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS w, u.id AS gid, COUNT(DISTINCT i.id) AS v FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2) m ON m.w = wk.w AND m.gid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
         }
       ],
@@ -734,7 +1220,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 91
       },
       "id": 110,
       "panels": []
@@ -752,7 +1238,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 49
+        "y": 92
       },
       "fieldConfig": {
         "defaults": {
@@ -814,7 +1300,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 49
+        "y": 92
       },
       "fieldConfig": {
         "defaults": {
@@ -871,7 +1357,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 100
       },
       "id": 150,
       "panels": [
@@ -888,7 +1374,7 @@
             "h": 9,
             "w": 8,
             "x": 0,
-            "y": 58
+            "y": 101
           },
           "fieldConfig": {
             "defaults": {
@@ -953,7 +1439,7 @@
             "h": 9,
             "w": 8,
             "x": 8,
-            "y": 58
+            "y": 101
           },
           "fieldConfig": {
             "defaults": {
@@ -1018,7 +1504,7 @@
             "h": 9,
             "w": 8,
             "x": 16,
-            "y": 58
+            "y": 101
           },
           "fieldConfig": {
             "defaults": {
@@ -1083,7 +1569,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 67
+            "y": 110
           },
           "fieldConfig": {
             "defaults": {
@@ -1145,7 +1631,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 101
       },
       "id": 120,
       "panels": []
@@ -1163,7 +1649,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 102
       },
       "fieldConfig": {
         "defaults": {
@@ -1225,7 +1711,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 102
       },
       "fieldConfig": {
         "defaults": {
@@ -1282,7 +1768,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 111
       },
       "id": 130,
       "panels": []
@@ -1300,7 +1786,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 69
+        "y": 112
       },
       "fieldConfig": {
         "defaults": {
@@ -1353,7 +1839,7 @@
         "h": 9,
         "w": 14,
         "x": 0,
-        "y": 80
+        "y": 123
       },
       "fieldConfig": {
         "defaults": {
@@ -1406,7 +1892,7 @@
         "h": 9,
         "w": 10,
         "x": 14,
-        "y": 80
+        "y": 123
       },
       "fieldConfig": {
         "defaults": {
@@ -1496,17 +1982,79 @@
           "type": "mysql",
           "uid": "devlake-mysql-api"
         },
-        "definition": "SELECT DISTINCT name FROM users ORDER BY name",
+        "definition": "SELECT DISTINCT name FROM teams ORDER BY name",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Team",
+        "multi": true,
+        "name": "team",
+        "options": [],
+        "query": "SELECT DISTINCT name FROM teams ORDER BY name",
+        "refresh": 1,
+        "type": "query",
+        "sort": 1
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "mysql",
+          "uid": "devlake-mysql-api"
+        },
+        "definition": "SELECT DISTINCT u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) ORDER BY u.name",
         "hide": 0,
         "includeAll": true,
         "label": "Person",
         "multi": true,
         "name": "person",
         "options": [],
-        "query": "SELECT DISTINCT name FROM users ORDER BY name",
+        "query": "SELECT DISTINCT u.name FROM users u JOIN team_users tu ON tu.user_id = u.id JOIN teams t ON t.id = tu.team_id WHERE t.name IN ($team) ORDER BY u.name",
         "refresh": 1,
         "type": "query",
         "sort": 1
+      },
+      {
+        "name": "metric",
+        "label": "Metric (matrix)",
+        "type": "custom",
+        "hide": 0,
+        "multi": false,
+        "includeAll": false,
+        "query": "Credits : credits, AI-linked commits : session_linked_commits, Merged PRs : merged_prs, Issues resolved : resolved_issues",
+        "current": {
+          "selected": true,
+          "text": "Credits",
+          "value": "credits"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "Credits",
+            "value": "credits"
+          },
+          {
+            "selected": false,
+            "text": "AI-linked commits",
+            "value": "session_linked_commits"
+          },
+          {
+            "selected": false,
+            "text": "Merged PRs",
+            "value": "merged_prs"
+          },
+          {
+            "selected": false,
+            "text": "Issues resolved",
+            "value": "resolved_issues"
+          }
+        ]
       }
     ]
   },
@@ -1518,5 +2066,5 @@
   "timezone": "",
   "title": "Kiro Session \u2192 Delivery Trace",
   "uid": "kiro_session_trace",
-  "version": 5
+  "version": 7
 }
