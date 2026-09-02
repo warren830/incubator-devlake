@@ -36,7 +36,7 @@ func (KiroSessionCommit) TableName() string {
 
 type KiroCommitScanState struct {
 	archived.NoPKModel
-	ConnectionId         uint64 `gorm:"primaryKey"`
+	ConnectionId         uint64 `gorm:"primaryKey;autoIncrement:false"`
 	LastScannedUpdatedAt *time.Time
 }
 

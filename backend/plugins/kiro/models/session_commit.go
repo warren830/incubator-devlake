@@ -56,7 +56,9 @@ func (KiroSessionCommit) TableName() string {
 // of the whole commits table every time.
 type KiroCommitScanState struct {
 	common.NoPKModel
-	ConnectionId uint64 `gorm:"primaryKey" json:"connectionId"`
+	// autoIncrement:false because gorm treats a lone integer primary key as a
+	// serial column; this one is the kiro connection's id, never generated.
+	ConnectionId uint64 `gorm:"primaryKey;autoIncrement:false" json:"connectionId"`
 	// LastScannedUpdatedAt is the largest commits.updated_at processed so far.
 	// The next run resumes from >= this value; re-reading rows that share the
 	// boundary timestamp is harmless because inserts are idempotent upserts.
