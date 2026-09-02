@@ -36,7 +36,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- **Per person** row: one series per *person* in every band, on one shared time axis, so a week can be read top-to-bottom: credits spent \u2192 AI-linked commits \u2192 PRs merged \u2192 issues resolved. People come from DevLake's **curated identity mapping** (`users` / `user_accounts`, i.e. the org plugin's users.csv and user_accounts.csv) \u2014 never from a heuristic. Pick people in the **Person** selector; colours are assigned by name, so a person keeps one colour across bands. Accounts nobody has mapped do not appear there.\n- The collapsed **By raw identity** row keeps the four unmapped namespaces \u2014 Kiro users, PR authors (forge logins), issue assignees, git author emails \u2014 side by side and deliberately NOT merged: the only merge on this dashboard is the curated mapping above.",
+        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- **Per person** row: one series per *person* in every band, on one shared time axis, so a week can be read top-to-bottom: credits spent \u2192 AI-linked commits \u2192 PRs merged \u2192 issues resolved. People come from DevLake's **curated identity mapping** (`users` / `user_accounts`, i.e. the org plugin's users.csv and user_accounts.csv) \u2014 never from a heuristic. Pick people in the **Person** selector; each band is grouped bars on the same zero-filled week axis, so a person keeps one slot and one colour in every band. Accounts nobody has mapped do not appear there.\n- The collapsed **By raw identity** row keeps the four unmapped namespaces \u2014 Kiro users, PR authors (forge logins), issue assignees, git author emails \u2014 side by side and deliberately NOT merged: the only merge on this dashboard is the curated mapping above.",
         "mode": "markdown"
       },
       "transparent": true
@@ -352,44 +352,102 @@
       "panels": []
     },
     {
-      "type": "timeseries",
-      "title": "Credits per week",
-      "description": "Kiro credits (official usage report) per person per week. Identity: user_email \u2192 user_accounts \u2192 users.",
-      "id": 141,
+      "type": "table",
+      "title": "Per person totals (selected range)",
+      "description": "Totals for the selected people over the dashboard time range: credits (Kiro report), session-linked commits, merged PRs, resolved issues. Descriptive, as-is; no ratios on purpose.",
+      "id": 145,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 24,
         "x": 0,
         "y": 13
       },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic-by-name"
-          },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "pointSize": 6,
-            "showPoints": "always",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "spanNulls": false,
-            "axisSoftMin": 0
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
           },
-          "unit": "short"
+          "unit": "none",
+          "decimals": 0
         },
         "overrides": []
       },
       "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        },
+        "sortBy": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT u.name AS `Person`, (SELECT ROUND(COALESCE(SUM(r.credits_used), 0)) FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email WHERE ua.user_id = u.id AND $__timeFilter(r.date)) AS `Credits`, (SELECT COUNT(DISTINCT sc.commit_sha) FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id WHERE ua.user_id = u.id AND $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `AI-linked commits`, (SELECT COUNT(DISTINCT pr.id) FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id WHERE ua.user_id = u.id AND pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project))) AS `Merged PRs`, (SELECT COUNT(DISTINCT i.id) FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id WHERE ua.user_id = u.id AND i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date)) AS `Issues resolved` FROM users u WHERE u.name IN ($person) ORDER BY u.name",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Credits per week",
+      "description": "Kiro credits (official usage report) per person per week. Identity: user_email \u2192 user_accounts \u2192 users. Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
+      "id": 141,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
+          },
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "auto",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
         "legend": {
           "calcs": [
             "sum"
@@ -400,7 +458,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
@@ -410,46 +468,50 @@
             "uid": "devlake-mysql-api"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS time, u.name AS metric, SUM(r.credits_used) AS credits FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(r.date) AND u.name IN ($person) GROUP BY 1, 2 ORDER BY 1, 2",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS credits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS w, u.id AS uid, SUM(r.credits_used) AS v FROM _tool_kiro_user_report r JOIN user_accounts ua ON ua.account_id = r.user_email JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(r.date) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "person",
+            "rowField": "week",
+            "valueField": "credits",
+            "emptyValue": "zero"
+          }
         }
       ]
     },
     {
-      "type": "timeseries",
+      "type": "barchart",
       "title": "Session-linked commits per week",
-      "description": "Commits carrying a session trailer, per person per week. Identity: commit author_id \u2192 user_accounts \u2192 users. The bridge between spend (above) and delivery (below).",
+      "description": "Commits carrying a session trailer, per person per week. Identity: commit author_id \u2192 user_accounts \u2192 users. The bridge between spend (above) and delivery (below). Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
       "id": 142,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 19
+        "y": 27
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic-by-name"
+            "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "pointSize": 6,
-            "showPoints": "always",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "spanNulls": false,
-            "axisSoftMin": 0
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
           },
           "unit": "short",
           "decimals": 0
@@ -457,6 +519,15 @@
         "overrides": []
       },
       "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
         "legend": {
           "calcs": [
             "sum"
@@ -467,7 +538,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
@@ -477,46 +548,50 @@
             "uid": "devlake-mysql-api"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS time, u.name AS metric, COUNT(DISTINCT sc.commit_sha) AS session_linked_commits FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(c.authored_date) AND u.name IN ($person) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2 ORDER BY 1, 2",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS session_linked_commits FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT sc.commit_sha) AS v FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = c.sha JOIN user_accounts ua ON ua.account_id = c.author_id JOIN users u ON u.id = ua.user_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "person",
+            "rowField": "week",
+            "valueField": "session_linked_commits",
+            "emptyValue": "zero"
+          }
         }
       ]
     },
     {
-      "type": "timeseries",
+      "type": "barchart",
       "title": "Merged PRs per week",
-      "description": "Merged pull requests per person per week. Identity: PR author_id \u2192 user_accounts \u2192 users.",
+      "description": "Merged pull requests per person per week. Identity: PR author_id \u2192 user_accounts \u2192 users. Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
       "id": 143,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 34
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic-by-name"
+            "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "pointSize": 6,
-            "showPoints": "always",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "spanNulls": false,
-            "axisSoftMin": 0
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
           },
           "unit": "short",
           "decimals": 0
@@ -524,6 +599,15 @@
         "overrides": []
       },
       "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
         "legend": {
           "calcs": [
             "sum"
@@ -534,7 +618,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
@@ -544,46 +628,50 @@
             "uid": "devlake-mysql-api"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS time, u.name AS metric, COUNT(DISTINCT pr.id) AS merged_prs FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND u.name IN ($person) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2 ORDER BY 1, 2",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS merged_prs FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(pr.merged_date), INTERVAL WEEKDAY(pr.merged_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT pr.id) AS v FROM pull_requests pr JOIN user_accounts ua ON ua.account_id = pr.author_id JOIN users u ON u.id = ua.user_id WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "person",
+            "rowField": "week",
+            "valueField": "merged_prs",
+            "emptyValue": "zero"
+          }
         }
       ]
     },
     {
-      "type": "timeseries",
+      "type": "barchart",
       "title": "Issues resolved per week",
-      "description": "Issues with a resolution date per person per week (assignee). Identity: assignee_id \u2192 user_accounts \u2192 users.",
+      "description": "Issues with a resolution date per person per week (assignee). Identity: assignee_id \u2192 user_accounts \u2192 users. Grouped bars: one slot per person inside every week, zero-filled, so the same person sits in the same slot and colour in every band.",
       "id": 144,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 24,
         "x": 0,
-        "y": 31
+        "y": 41
       },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic-by-name"
+            "mode": "palette-classic"
           },
           "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "barAlignment": 0,
-            "lineWidth": 2,
-            "pointSize": 6,
-            "showPoints": "always",
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "spanNulls": false,
-            "axisSoftMin": 0
+            "fillOpacity": 85,
+            "lineWidth": 1,
+            "gradientMode": "none",
+            "axisSoftMin": 0,
+            "axisPlacement": "auto"
           },
           "unit": "short",
           "decimals": 0
@@ -591,6 +679,15 @@
         "overrides": []
       },
       "options": {
+        "orientation": "auto",
+        "groupWidth": 0.78,
+        "barWidth": 0.92,
+        "barRadius": 0,
+        "stacking": "none",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "fullHighlight": false,
         "legend": {
           "calcs": [
             "sum"
@@ -601,7 +698,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
@@ -611,10 +708,21 @@
             "uid": "devlake-mysql-api"
           },
           "editorMode": "code",
-          "format": "time_series",
+          "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS time, u.name AS metric, COUNT(DISTINCT i.id) AS resolved_issues FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) AND u.name IN ($person) GROUP BY 1, 2 ORDER BY 1, 2",
+          "rawSql": "WITH RECURSIVE wk AS (SELECT DATE_SUB(DATE($__timeFrom()), INTERVAL WEEKDAY($__timeFrom()) DAY) AS w UNION ALL SELECT DATE_ADD(w, INTERVAL 7 DAY) FROM wk WHERE DATE_ADD(w, INTERVAL 7 DAY) < DATE($__timeTo())), ppl AS (SELECT id, name FROM users WHERE name IN ($person)) SELECT DATE_FORMAT(wk.w, '%m-%d') AS week, ppl.name AS person, COALESCE(m.v, 0) AS resolved_issues FROM wk CROSS JOIN ppl LEFT JOIN (SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS w, u.id AS uid, COUNT(DISTINCT i.id) AS v FROM issues i JOIN user_accounts ua ON ua.account_id = i.assignee_id JOIN users u ON u.id = ua.user_id WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2) m ON m.w = wk.w AND m.uid = ppl.id ORDER BY wk.w, ppl.name",
           "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "person",
+            "rowField": "week",
+            "valueField": "resolved_issues",
+            "emptyValue": "zero"
+          }
         }
       ]
     },
@@ -626,7 +734,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 48
       },
       "id": 110,
       "panels": []
@@ -644,7 +752,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 49
       },
       "fieldConfig": {
         "defaults": {
@@ -706,7 +814,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 38
+        "y": 49
       },
       "fieldConfig": {
         "defaults": {
@@ -763,7 +871,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 57
       },
       "id": 150,
       "panels": [
@@ -780,7 +888,7 @@
             "h": 9,
             "w": 8,
             "x": 0,
-            "y": 47
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -845,7 +953,7 @@
             "h": 9,
             "w": 8,
             "x": 8,
-            "y": 47
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -910,7 +1018,7 @@
             "h": 9,
             "w": 8,
             "x": 16,
-            "y": 47
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -975,7 +1083,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 56
+            "y": 67
           },
           "fieldConfig": {
             "defaults": {
@@ -1037,7 +1145,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 58
       },
       "id": 120,
       "panels": []
@@ -1055,7 +1163,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 59
       },
       "fieldConfig": {
         "defaults": {
@@ -1117,7 +1225,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 48
+        "y": 59
       },
       "fieldConfig": {
         "defaults": {
@@ -1174,7 +1282,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 68
       },
       "id": 130,
       "panels": []
@@ -1192,7 +1300,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 69
       },
       "fieldConfig": {
         "defaults": {
@@ -1245,7 +1353,7 @@
         "h": 9,
         "w": 14,
         "x": 0,
-        "y": 69
+        "y": 80
       },
       "fieldConfig": {
         "defaults": {
@@ -1298,7 +1406,7 @@
         "h": 9,
         "w": 10,
         "x": 14,
-        "y": 69
+        "y": 80
       },
       "fieldConfig": {
         "defaults": {
@@ -1410,5 +1518,5 @@
   "timezone": "",
   "title": "Kiro Session \u2192 Delivery Trace",
   "uid": "kiro_session_trace",
-  "version": 4
+  "version": 5
 }
