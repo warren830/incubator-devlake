@@ -36,7 +36,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- Person trends use **three separate namespaces side by side** \u2014 Kiro users (credits), issue assignees, git author emails \u2014 deliberately NOT merged: cross-namespace identity resolution is DevDelta's job, and a wrong merge is worse than no merge.",
+        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (enabled by default in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- Person trends use **four separate namespaces side by side** \u2014 Kiro users (credits), PR authors (forge logins), issue assignees, git author emails \u2014 deliberately NOT merged: cross-namespace identity resolution is DevDelta's job, and a wrong merge is worse than no merge. Read them as one row per person per week: credits spent, PRs merged, issues resolved.",
         "mode": "markdown"
       },
       "transparent": true
@@ -486,7 +486,7 @@
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 22
       },
@@ -500,12 +500,13 @@
             "fillOpacity": 12,
             "barAlignment": 0,
             "lineWidth": 2,
-            "pointSize": 5,
-            "showPoints": "never",
+            "pointSize": 6,
+            "showPoints": "always",
             "stacking": {
               "group": "A",
               "mode": "none"
-            }
+            },
+            "spanNulls": false
           },
           "unit": "short"
         },
@@ -541,17 +542,17 @@
     },
     {
       "type": "timeseries",
-      "title": "Issues resolved per week by assignee",
-      "description": "One series per issue assignee. Namespace: issue tracker identity \u2014 not merged with Kiro users.",
-      "id": 114,
+      "title": "Merged PRs per week by PR author",
+      "description": "One series per PR author (code-host login, as collected by the forge plugin). Namespace: code-host identity. Same week buckets as the credits and issue panels, so a person can be read across all three.",
+      "id": 116,
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "devlake-postgres-api"
       },
       "gridPos": {
         "h": 9,
-        "w": 12,
-        "x": 12,
+        "w": 8,
+        "x": 8,
         "y": 22
       },
       "fieldConfig": {
@@ -564,12 +565,78 @@
             "fillOpacity": 12,
             "barAlignment": 0,
             "lineWidth": 2,
-            "pointSize": 5,
-            "showPoints": "never",
+            "pointSize": 6,
+            "showPoints": "always",
             "stacking": {
               "group": "A",
               "mode": "none"
-            }
+            },
+            "spanNulls": false
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "devlake-postgres-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT CAST(pr.merged_date AS DATE) - (EXTRACT(ISODOW FROM CAST(pr.merged_date AS DATE)) - 1) * INTERVAL '1 day' AS time, CASE WHEN pr.author_name = '' OR pr.author_name IS NULL THEN 'unknown' ELSE pr.author_name END AS metric, COUNT(DISTINCT pr.id) AS merged_prs FROM pull_requests pr WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND pr.base_repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.\"table\" = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Issues resolved per week by assignee",
+      "description": "One series per issue assignee. Namespace: issue tracker identity \u2014 not merged with Kiro users.",
+      "id": 114,
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "devlake-postgres-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 8,
+        "x": 16,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "pointSize": 6,
+            "showPoints": "always",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "spanNulls": false
           },
           "unit": "short"
         },
@@ -628,12 +695,13 @@
             "fillOpacity": 12,
             "barAlignment": 0,
             "lineWidth": 2,
-            "pointSize": 5,
-            "showPoints": "never",
+            "pointSize": 6,
+            "showPoints": "always",
             "stacking": {
               "group": "A",
               "mode": "none"
-            }
+            },
+            "spanNulls": false
           },
           "unit": "short"
         },
@@ -1022,5 +1090,5 @@
   "timezone": "",
   "title": "Kiro Session \u2192 Delivery Trace",
   "uid": "kiro_session_trace-pg",
-  "version": 2
+  "version": 3
 }
