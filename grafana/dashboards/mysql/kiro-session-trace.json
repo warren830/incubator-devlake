@@ -25,7 +25,7 @@
       "type": "text",
       "title": "",
       "gridPos": {
-        "h": 5,
+        "h": 6,
         "w": 24,
         "x": 0,
         "y": 0
@@ -36,7 +36,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (disabled by default \u2014 enable it in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.",
+        "content": "## Kiro Session \u2192 Delivery Trace\nTraces AI sessions to delivery through commit-message trailers: **session \u2192 commit \u2192 merged PR \u2192 issue**.\n\n- Data source: the `extractKiroSessionCommits` subtask (disabled by default \u2014 enable it in the kiro plugin) parses `Kiro-Session-Id` / `Devdelta-Session-Id` trailers out of commit messages already collected into the lake.\n- **This is an AS-IS association**: no author verification and no trust gating. DevDelta's three-edge attribution (author match + trailer + SHA in merged PR) is the audited version; treat these numbers as descriptive lineage, not verified attribution.\n- PR\u2192issue edges come from `pull_request_issues`, which depends on teams referencing issue keys in PR titles/descriptions/branch names \u2014 missing links usually mean a missing convention, not missing AI work.\n- Person trends use **three separate namespaces side by side** \u2014 Kiro users (credits), issue assignees, git author emails \u2014 deliberately NOT merged: cross-namespace identity resolution is DevDelta's job, and a wrong merge is worse than no merge.",
         "mode": "markdown"
       },
       "transparent": true
@@ -49,7 +49,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 6
       },
       "id": 100,
       "panels": []
@@ -67,7 +67,7 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 6
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -138,7 +138,7 @@
         "h": 5,
         "w": 6,
         "x": 6,
-        "y": 6
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -209,7 +209,7 @@
         "h": 5,
         "w": 6,
         "x": 12,
-        "y": 6
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -280,7 +280,7 @@
         "h": 5,
         "w": 6,
         "x": 18,
-        "y": 6
+        "y": 7
       },
       "fieldConfig": {
         "defaults": {
@@ -340,22 +340,22 @@
     },
     {
       "type": "row",
-      "title": "Weekly coverage",
+      "title": "Trends over time",
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 12
       },
       "id": 110,
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "Commits: all vs session-linked (weekly)",
-      "description": "Gap between the bars = commits without a trailer (human-only work, or hooks not installed)",
-      "id": 112,
+      "title": "Credits per week (total)",
+      "description": "From _tool_kiro_user_report (official billing). Not project-filtered: credits have no repo dimension.",
+      "id": 111,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
@@ -364,7 +364,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 13
       },
       "fieldConfig": {
         "defaults": {
@@ -396,7 +396,336 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS time, SUM(r.credits_used) AS credits FROM _tool_kiro_user_report r WHERE $__timeFilter(r.date) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Issues resolved per week (total)",
+      "description": "All resolved issues by resolution_date. Not project-filtered by repo; issue boards may span projects.",
+      "id": 112,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS time, COUNT(DISTINCT i.id) AS resolved_issues FROM issues i WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Credits per week by person (Kiro users)",
+      "description": "One series per Kiro user (display name, falling back to user id). Namespace: Kiro identity.",
+      "id": 113,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(r.date), INTERVAL WEEKDAY(r.date) DAY) AS time, COALESCE(MAX(r.display_name), r.user_id) AS metric, SUM(r.credits_used) AS credits FROM _tool_kiro_user_report r WHERE $__timeFilter(r.date) GROUP BY 1, r.user_id ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Issues resolved per week by assignee",
+      "description": "One series per issue assignee. Namespace: issue tracker identity \u2014 not merged with Kiro users.",
+      "id": 114,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(i.resolution_date), INTERVAL WEEKDAY(i.resolution_date) DAY) AS time, CASE WHEN i.assignee_name = '' OR i.assignee_name IS NULL THEN 'unassigned' ELSE i.assignee_name END AS metric, COUNT(DISTINCT i.id) AS resolved_issues FROM issues i WHERE i.resolution_date IS NOT NULL AND $__timeFilter(i.resolution_date) GROUP BY 1, 2 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Session-linked commits per week by author",
+      "description": "One series per git author email; counts commits carrying a session trailer. Namespace: git identity.",
+      "id": 115,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT DATE_SUB(DATE(c.authored_date), INTERVAL WEEKDAY(c.authored_date) DAY) AS time, CASE WHEN c.author_email = '' OR c.author_email IS NULL THEN 'unknown' ELSE c.author_email END AS metric, COUNT(DISTINCT sc.commit_sha) AS session_linked_commits FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1, 2 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Weekly coverage",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 120,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Commits: all vs session-linked (weekly)",
+      "description": "Gap between the bars = commits without a trailer (human-only work, or hooks not installed)",
+      "id": 121,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 41
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
       },
       "targets": [
@@ -417,7 +746,7 @@
       "type": "timeseries",
       "title": "Merged PRs: all vs session-linked (weekly)",
       "description": "A PR counts as session-linked when any of its commits carries a trailer",
-      "id": 113,
+      "id": 122,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
@@ -426,7 +755,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 41
       },
       "fieldConfig": {
         "defaults": {
@@ -458,7 +787,7 @@
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "none"
+          "sort": "desc"
         }
       },
       "targets": [
@@ -483,16 +812,16 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 50
       },
-      "id": 120,
+      "id": 130,
       "panels": []
     },
     {
       "type": "table",
       "title": "Session \u2192 Commit \u2192 PR \u2192 Issue (latest 200)",
       "description": "Empty PR/Issue cells mean that hop has no edge yet: PR not merged/collected, or no issue key referenced",
-      "id": 121,
+      "id": 131,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
@@ -501,7 +830,7 @@
         "h": 11,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 51
       },
       "fieldConfig": {
         "defaults": {
@@ -536,7 +865,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT sc.session_id AS `Session`, sc.trailer_key AS `Agent`, SUBSTRING(sc.commit_sha, 1, 8) AS `Commit`, c.authored_date AS `Authored`, pr.pull_request_key AS `PR #`, pr.title AS `PR Title`, pr.merged_date AS `Merged`, pri.issue_key AS `Issue`, i.title AS `Issue Title`, i.type AS `Issue Type` FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha LEFT JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha LEFT JOIN pull_requests pr ON pr.id = prc.pull_request_id LEFT JOIN pull_request_issues pri ON pri.pull_request_id = pr.id LEFT JOIN issues i ON i.id = pri.issue_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) ORDER BY c.authored_date DESC LIMIT 200",
+          "rawSql": "SELECT sc.session_id AS `Session`, sc.trailer_key AS `Agent`, SUBSTRING(sc.commit_sha, 1, 8) AS `Commit`, c.authored_date AS `Authored`, pr.pull_request_key AS `PR #`, pr.title AS `PR Title`, pr.merged_date AS `Merged`, pri.issue_key AS `Issue`, i.title AS `Issue Title`, i.type AS `Issue Type`, i.assignee_name AS `Assignee` FROM _tool_kiro_session_commits sc JOIN commits c ON c.sha = sc.commit_sha JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha LEFT JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha LEFT JOIN pull_requests pr ON pr.id = prc.pull_request_id LEFT JOIN pull_request_issues pri ON pri.pull_request_id = pr.id LEFT JOIN issues i ON i.id = pri.issue_id WHERE $__timeFilter(c.authored_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) ORDER BY c.authored_date DESC LIMIT 200",
           "refId": "A"
         }
       ]
@@ -545,16 +874,16 @@
       "type": "table",
       "title": "Issues by AI involvement (dose, as-is)",
       "description": "Sessions/commits/PRs per issue. Dose comparison is only meaningful within similar task types.",
-      "id": 122,
+      "id": 132,
       "datasource": {
         "type": "mysql",
         "uid": "devlake-mysql-api"
       },
       "gridPos": {
         "h": 9,
-        "w": 24,
+        "w": 14,
         "x": 0,
-        "y": 33
+        "y": 62
       },
       "fieldConfig": {
         "defaults": {
@@ -589,7 +918,60 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT pri.issue_key AS `Issue`, MAX(i.title) AS `Title`, MAX(i.type) AS `Type`, COUNT(DISTINCT sc.session_id) AS `Sessions`, COUNT(DISTINCT sc.commit_sha) AS `Commits`, COUNT(DISTINCT pr.id) AS `PRs` FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN pull_request_issues pri ON pri.pull_request_id = pr.id JOIN issues i ON i.id = pri.issue_id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY pri.issue_key ORDER BY COUNT(DISTINCT sc.session_id) DESC LIMIT 100",
+          "rawSql": "SELECT pri.issue_key AS `Issue`, MAX(i.title) AS `Title`, MAX(i.type) AS `Type`, MAX(CASE WHEN i.assignee_name = '' OR i.assignee_name IS NULL THEN 'unassigned' ELSE i.assignee_name END) AS `Assignee`, COUNT(DISTINCT sc.session_id) AS `Sessions`, COUNT(DISTINCT sc.commit_sha) AS `Commits`, COUNT(DISTINCT pr.id) AS `PRs` FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN pull_request_issues pri ON pri.pull_request_id = pr.id JOIN issues i ON i.id = pri.issue_id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY pri.issue_key ORDER BY COUNT(DISTINCT sc.session_id) DESC LIMIT 100",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Assignees by AI-linked delivery",
+      "description": "Per-assignee rollup of AI-linked issues/PRs/sessions. Descriptive only \u2014 NOT a ranking; task mix differs per person.",
+      "id": 133,
+      "datasource": {
+        "type": "mysql",
+        "uid": "devlake-mysql-api"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 10,
+        "x": 14,
+        "y": 62
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "mysql",
+            "uid": "devlake-mysql-api"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE WHEN i.assignee_name = '' OR i.assignee_name IS NULL THEN 'unassigned' ELSE i.assignee_name END AS `Assignee`, COUNT(DISTINCT pri.issue_id) AS `AI-linked issues`, COUNT(DISTINCT pr.id) AS `PRs`, COUNT(DISTINCT sc.session_id) AS `Sessions`, COUNT(DISTINCT sc.commit_sha) AS `Commits` FROM _tool_kiro_session_commits sc JOIN pull_request_commits prc ON prc.commit_sha = sc.commit_sha JOIN pull_requests pr ON pr.id = prc.pull_request_id JOIN pull_request_issues pri ON pri.pull_request_id = pr.id JOIN issues i ON i.id = pri.issue_id JOIN repo_commits rc ON rc.commit_sha = sc.commit_sha WHERE pr.merged_date IS NOT NULL AND $__timeFilter(pr.merged_date) AND rc.repo_id IN (SELECT pm.row_id FROM project_mapping pm WHERE pm.`table` = 'repos' AND pm.project_name IN ($project)) GROUP BY 1 ORDER BY COUNT(DISTINCT pri.issue_id) DESC LIMIT 50",
           "refId": "A"
         }
       ]
@@ -640,5 +1022,5 @@
   "timezone": "",
   "title": "Kiro Session \u2192 Delivery Trace",
   "uid": "kiro_session_trace",
-  "version": 1
+  "version": 2
 }
