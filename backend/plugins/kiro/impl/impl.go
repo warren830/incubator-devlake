@@ -109,6 +109,9 @@ func (p Kiro) SubTaskMetas() []plugin.SubTaskMeta {
 	return []plugin.SubTaskMeta{
 		tasks.CollectKiroS3FilesMeta,
 		tasks.ExtractKiroUserReportMeta,
+		// Projects the report's users into domain `accounts`, which is what the
+		// org plugin maps to people; without it Kiro identities are unmappable.
+		tasks.ConvertKiroAccountsMeta,
 		tasks.ExtractKiroChatLogMeta,
 		tasks.ExtractKiroCompletionLogMeta,
 		// Reads the domain commits table rather than S3, so it needs no scope
