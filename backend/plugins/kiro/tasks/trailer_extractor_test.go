@@ -18,6 +18,9 @@ limitations under the License.
 package tasks
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -83,6 +86,46 @@ func TestParseSessionTrailers(t *testing.T) {
 			got := ParseSessionTrailers(tc.msg)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("ParseSessionTrailers() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseSessionTrailersSharedFixture pins the reader to the golden cases
+// the writer (DevDelta internal/client/commitlink, ExtractSessionIDs) is
+// tested against. The fixture is duplicated in both repositories on purpose:
+// if this test and its twin disagree, one parser has drifted and a commit is
+// attributed differently in the lake than on the server that wrote it.
+func TestParseSessionTrailersSharedFixture(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "session_trailers.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fx struct {
+		Cases []struct {
+			Name    string `json:"name"`
+			Message string `json:"message"`
+			Want    []struct {
+				Key string `json:"key"`
+				ID  string `json:"id"`
+			} `json:"want"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &fx); err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.Cases) == 0 {
+		t.Fatal("fixture has no cases")
+	}
+	for _, tc := range fx.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			var want []sessionTrailer
+			for _, w := range tc.Want {
+				want = append(want, sessionTrailer{TrailerKey: w.Key, SessionId: w.ID})
+			}
+			got := ParseSessionTrailers(tc.Message)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("ParseSessionTrailers() = %v, want %v", got, want)
 			}
 		})
 	}

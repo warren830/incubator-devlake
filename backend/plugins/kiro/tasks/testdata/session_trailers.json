@@ -1,0 +1,113 @@
+{
+  "note": "Shared golden cases for the session trailer parser. Two copies exist and must stay identical: DevDelta internal/client/commitlink/testdata/session_trailers.json (writer side, ExtractSessionIDs) and DevLake backend/plugins/kiro/tasks/testdata/session_trailers.json (reader side, ParseSessionTrailers). A commit message is parsed on both ends with the same loose, line-anchored regex; a case added here must be added to the twin file in the same change.",
+  "cases": [
+    {
+      "name": "plain trailer at end",
+      "message": "fix: login crash\n\nKiro-Session-Id: sess_11111111-2222-4333-8444-555555555555\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "sess_11111111-2222-4333-8444-555555555555"
+        }
+      ]
+    },
+    {
+      "name": "indented by local squash, space and tab",
+      "message": "squashed commit\n\n    Kiro-Session-Id: sess_11111111-2222-4333-8444-555555555555\n\tKiro-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "sess_11111111-2222-4333-8444-555555555555"
+        },
+        {
+          "key": "kiro",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "buried mid-body by github squash",
+      "message": "feat: big feature (#42)\n\n* first commit\n\nKiro-Session-Id: sess_11111111-2222-4333-8444-555555555555\n\n* second commit\ncleanup\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "sess_11111111-2222-4333-8444-555555555555"
+        }
+      ]
+    },
+    {
+      "name": "multiple sessions, mixed keys, order kept",
+      "message": "feat: pair work\n\nKiro-Session-Id: sess_11111111-2222-4333-8444-555555555555\nDevdelta-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "sess_11111111-2222-4333-8444-555555555555"
+        },
+        {
+          "key": "devdelta",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "duplicate id kept once, first key wins",
+      "message": "chore\n\nKiro-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543\nDevdelta-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "bare uuid under the devdelta key (Claude Code)",
+      "message": "fix\n\nDevdelta-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543\n",
+      "want": [
+        {
+          "key": "devdelta",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "invalid values rejected",
+      "message": "x\n\nKiro-Session-Id: not-a-uuid\nKiro-Session-Id: sess_zzzz\n",
+      "want": []
+    },
+    {
+      "name": "key mentioned mid-sentence is not line-anchored",
+      "message": "docs: explain that the Kiro-Session-Id: trailer format uses uuids\n",
+      "want": []
+    },
+    {
+      "name": "line-leading key in prose DOES match when the value is a valid id (loose by design)",
+      "message": "Kiro-Session-Id: 9f8e7d6c-5b4a-4321-8765-432109876543 was the culprit\n",
+      "want": [
+        {
+          "key": "kiro",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "key is case-sensitive, as both writers emit it",
+      "message": "x\n\nkiro-session-id: 9f8e7d6c-5b4a-4321-8765-432109876543\nKIRO-SESSION-ID: sess_11111111-2222-4333-8444-555555555555\n",
+      "want": []
+    },
+    {
+      "name": "no space after the colon is accepted",
+      "message": "x\n\nDevdelta-Session-Id:9f8e7d6c-5b4a-4321-8765-432109876543\n",
+      "want": [
+        {
+          "key": "devdelta",
+          "id": "9f8e7d6c-5b4a-4321-8765-432109876543"
+        }
+      ]
+    },
+    {
+      "name": "no trailer",
+      "message": "fix: something ordinary\n",
+      "want": []
+    }
+  ]
+}

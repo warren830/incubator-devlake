@@ -88,6 +88,13 @@ func ParseSessionTrailers(message string) []sessionTrailer {
 // one, and the SQL LIKE prefilter discards the vast majority of rows before
 // they ever reach Go. A malformed message can never fail the run - it simply
 // yields no matches - so the only error paths are database ones.
+//
+// Cost: the domain commits table carries no index on updated_at, so the
+// watermark bounds the rows returned but not the rows examined - every pass is
+// a table scan of commits, and the subtask runs once per kiro scope in a
+// blueprint. That is acceptable up to a few million commits; beyond it, an
+// index on commits(updated_at) is the fix, which belongs to core rather than to
+// this plugin (a plugin must not alter a domain table's schema).
 func ExtractKiroSessionCommits(taskCtx plugin.SubTaskContext) errors.Error {
 	data := taskCtx.GetData().(*KiroTaskData)
 	db := taskCtx.GetDal()
