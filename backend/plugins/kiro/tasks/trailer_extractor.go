@@ -31,15 +31,16 @@ import (
 
 var _ plugin.SubTaskEntryPoint = ExtractKiroSessionCommits
 
-// ExtractKiroSessionCommitsMeta is DISABLED by default on purpose: the first
-// rollout runs it from a manually created pipeline, and only after that run is
-// verified does an operator enable it in the blueprint. A new subtask that
-// fails must not be able to mark an established collection pipeline as failed
-// on its first day.
+// ExtractKiroSessionCommitsMeta runs in every kiro blueprint pass. It shipped
+// disabled so the first rollout could be verified from a manually created
+// pipeline before it was allowed anywhere near an established collection
+// blueprint; that run (2026-09-02, real lake: 68 commits scanned, 28 edges)
+// passed, so it is now enabled by default. It is safe to run unattended: it
+// makes no API calls, and its only failure paths are database errors.
 var ExtractKiroSessionCommitsMeta = plugin.SubTaskMeta{
 	Name:             "extractKiroSessionCommits",
 	EntryPoint:       ExtractKiroSessionCommits,
-	EnabledByDefault: false,
+	EnabledByDefault: true,
 	Description:      "Extract session-id trailers from commit messages already in the lake into the session-commit mapping",
 	DomainTypes:      []string{plugin.DOMAIN_TYPE_CROSS},
 }

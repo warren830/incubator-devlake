@@ -111,9 +111,9 @@ func (p Kiro) SubTaskMetas() []plugin.SubTaskMeta {
 		tasks.ExtractKiroUserReportMeta,
 		tasks.ExtractKiroChatLogMeta,
 		tasks.ExtractKiroCompletionLogMeta,
-		// Disabled by default: reads the domain commits table rather than S3,
-		// and first-run verification happens via a manual pipeline. See the
-		// meta's comment for the rollout story.
+		// Reads the domain commits table rather than S3, so it needs no scope
+		// of its own; runs in every blueprint pass. See the meta's comment for
+		// the rollout story.
 		tasks.ExtractKiroSessionCommitsMeta,
 	}
 }
